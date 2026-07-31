@@ -1,0 +1,16 @@
+node_modules/
+artifacts/
+cache/
+fhevmTemp/
+coverage/
+coverage.json
+typechain-types/
+
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
