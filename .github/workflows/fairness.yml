@@ -1,0 +1,57 @@
+name: Fairness proof (simulated)
+
+# Re-plays the NDIMBAL draw on SIMULATED test accounts and records the outcome.
+#
+# GUARD-RAIL (non-negotiable): this workflow NEVER reads or publishes real pool data —
+# no real balances, no real tickets, no real pool total. It only re-runs the fairness
+# harness (test/verify-draw.test.js) on the fhEVM mock with its own throw-away accounts,
+# then logs a binary result (exactly-one-winner + odds-rise-with-deposit). Everything it
+# writes is derived from synthetic data, exactly what the harness already does by design.
+
+on:
+  schedule:
+    - cron: "0 */12 * * *" # twice a day
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  verify-fairness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install
+
+      - name: Fairness harness — SIMULATED accounts only (never the real pool)
+        id: harness
+        continue-on-error: true
+        env:
+          ROUNDS: "200"
+        run: npx hardhat test test/verify-draw.test.js
+
+      - name: Append the result to FAIRNESS_LOG.md
+        run: |
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "${{ steps.harness.outcome }}" = "success" ]; then
+            RES="PASS — exactly one winner every round; bigger deposit won more"
+          else
+            RES="FAIL — see run log"
+          fi
+          echo "| $TS | 200 | ${{ steps.harness.outcome }} | $RES | [run]($RUN_URL) |" >> FAIRNESS_LOG.md
+          git config user.name "ndimbal-fairness-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add FAIRNESS_LOG.md
+          git commit -m "fairness: simulated verify @ $TS" || echo "nothing to commit"
+          git push
+
+      - name: Surface a failing harness as a failing job
+        if: steps.harness.outcome != 'success'
+        run: exit 1
