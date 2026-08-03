@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 104" role="img" aria-label="NDIMBAL logo">
+  <defs>
+    <linearGradient id="tok" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E5A4A"/>
+      <stop offset="1" stop-color="#0A4638"/>
+    </linearGradient>
+    <linearGradient id="cow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0B65C"/>
+      <stop offset="1" stop-color="#D6912F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- emblem: a cowrie shell (West-African symbol of money & community) on a rounded token -->
+  <g transform="translate(8,12)">
+    <rect x="0" y="0" width="80" height="80" rx="22" fill="url(#tok)"/>
+    <!-- gathered dots = a community pooling around it -->
+    <g fill="#E4A24C" opacity="0.55">
+      <circle cx="40" cy="10" r="2.4"/><circle cx="64" cy="16" r="2.4"/>
+      <circle cx="70" cy="40" r="2.4"/><circle cx="64" cy="64" r="2.4"/>
+      <circle cx="40" cy="70" r="2.4"/><circle cx="16" cy="64" r="2.4"/>
+      <circle cx="10" cy="40" r="2.4"/><circle cx="16" cy="16" r="2.4"/>
+    </g>
+    <!-- cowrie body -->
+    <ellipse cx="40" cy="40" rx="17" ry="24" fill="url(#cow)"/>
+    <!-- aperture (the shell's toothed slit) -->
+    <path d="M40 20 C31 30, 31 50, 40 60 C49 50, 49 30, 40 20 Z" fill="#0A4638"/>
+    <g stroke="#F0B65C" stroke-width="2" stroke-linecap="round">
+      <line x1="35" y1="29" x2="45" y2="29"/>
+      <line x1="34" y1="35" x2="46" y2="35"/>
+      <line x1="34" y1="41" x2="46" y2="41"/>
+      <line x1="34" y1="47" x2="46" y2="47"/>
+      <line x1="35" y1="53" x2="45" y2="53"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <g transform="translate(108,0)" font-family="'Segoe UI',system-ui,sans-serif">
+    <text x="0" y="60" font-size="44" font-weight="800" letter-spacing="3" fill="#0E5A4A">NDIM<tspan fill="#B87A28">BAL</tspan></text>
+    <text x="2" y="84" font-size="14.5" font-weight="600" letter-spacing="0.5" fill="#6E7688">Épargne sans perte · gains partagés · confidentiel</text>
+  </g>
+</svg>
