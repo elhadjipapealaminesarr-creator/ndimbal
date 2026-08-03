@@ -110,14 +110,14 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 
 **Security posture:** `nonReentrant` on all token-touching functions, anti-snipe deposit lock
 (`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, and give-back % + sponsorship snapshotted at draw (no post-win front-running). Ticket math uses
-`euint64` (`balance × randEuint32`) — widen to `euint128` for very large pools.
+`euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
 
 ## Deployed (Sepolia)
 
 | Contract | Address |
 |---|---|
-| **NdimbalPool** | [`0x49295aF16723bb49CEd8E9B82b53d6E653a18625`](https://sepolia.etherscan.io/address/0x49295aF16723bb49CEd8E9B82b53d6E653a18625) |
-| Confidential token (demo cUSDT) | [`0xFE75E3396035670e88Ca1DD9c80AFCBdd785fF80`](https://sepolia.etherscan.io/address/0xFE75E3396035670e88Ca1DD9c80AFCBdd785fF80) |
+| **NdimbalPool** | [`0x579Dc066A0E51bFe39cc507ebe55851729587f0c`](https://sepolia.etherscan.io/address/0x579Dc066A0E51bFe39cc507ebe55851729587f0c) |
+| Confidential token (demo cUSDT) | [`0x9dA75735C1C762FFf8F14cB63bA07De9a378318b`](https://sepolia.etherscan.io/address/0x9dA75735C1C762FFf8F14cB63bA07De9a378318b) |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
