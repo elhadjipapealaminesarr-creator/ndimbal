@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {FHE, euint32, euint64, ebool, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, euint32, euint64, euint128, ebool, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {INdimbalToken} from "./INdimbalToken.sol";
 
@@ -211,13 +211,16 @@ contract NdimbalPool is ZamaEthereumConfig {
         require(n > 0, "no participants");
         drawn[r] = true;
 
-        euint64[] memory tickets = new euint64[](n);
-        euint64 maxTicket = FHE.asEuint64(0);
+        // Ticket math is done in euint128: balance(euint64) × rand(euint32) can reach ~2^96,
+        // which would overflow euint64. Widening to euint128 keeps the weighting exact even for
+        // very large cumulative pools. Balances/prize/fund stay euint64 (ample for real amounts).
+        euint128[] memory tickets = new euint128[](n);
+        euint128 maxTicket = FHE.asEuint128(0);
 
         // pass 1: weighted encrypted tickets + running encrypted max
         for (uint256 i = 0; i < n; i++) {
-            euint32 rnd = FHE.randEuint32();                  // protocol randomness, encrypted
-            euint64 t = FHE.mul(_bal(participants[i]), rnd);  // ticket = balance × random
+            euint32 rnd = FHE.randEuint32();                                            // protocol randomness
+            euint128 t = FHE.mul(FHE.asEuint128(_bal(participants[i])), FHE.asEuint128(rnd)); // ticket = balance × random
             tickets[i] = t;
             maxTicket = FHE.max(maxTicket, t);
         }
