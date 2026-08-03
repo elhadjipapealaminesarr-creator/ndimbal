@@ -14,7 +14,9 @@ draw awards the yield-funded prize to one saver.
 > each saver privately pre-sets what share of a win they'd give back to a community fund — so
 > **generosity happens with zero social pressure**, and a lottery becomes mutual aid.
 
-**▶ Live demo (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated. Or open [`demo.html`](./demo.html) locally.
+**▶ Live dApp — real on-chain transactions:** **https://ndimbal-rho.vercel.app** — connect MetaMask on Sepolia, mint demo tokens, deposit (encrypted in your browser), run the confidential draw, and **decrypt your own result** — nobody else can read it. A guided 1→6 walkthrough explains every step.
+
+**▶ Animated overview / explainer (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated marketing walkthrough. Or open [`demo.html`](./demo.html) locally.
 
 > **Honest design note, up front:** the draw uses a fully-encrypted **weighted argmax**
 > (`ticket = balance × protocol-random`), so odds *strictly increase* with your deposit while the
@@ -34,6 +36,25 @@ draw awards the yield-funded prize to one saver.
 | — | Each saver's **private give-back %** |
 
 ---
+
+## The live dApp — play a full confidential round
+
+A production-quality React dApp (Vite + the Zama Relayer SDK) drives the deployed contract on
+Sepolia end-to-end — **real transactions, encrypted in your browser, decrypted only by you**.
+Live at **https://ndimbal-rho.vercel.app** (source: [`ndimbal-dapp`](https://github.com/elhadjipapealaminesarr-creator/ndimbal-dapp)).
+
+A guided **7-step** flow lets anyone play a full round:
+
+1. **Get test tokens** — mint demo cUSDT and authorize the pool.
+2. **Deposit** — your amount is FHE-encrypted client-side; withdraw any time (no loss).
+3. **Solidarity dial** — privately pre-set what share of a win you'd give back to the community.
+4. **Tanti caché (hidden benefactor)** — secretly route a share of your prize to a chosen member *if you win*; nobody learns who gave, to whom, or how much.
+5. **Fund the prize** — top up the pot blindly, without seeing any balance or the winner.
+6. **The draw** — run the confidential weighted draw, then claim (and claim any sponsored winnings).
+7. **Your private results** — decrypt values only you can read: *did I win?*, your pool balance, wallet balance, and sponsored winnings.
+
+Everything runs against the verified on-chain contract; the app never sees a plaintext balance.
+COOP/COEP headers enable the FHE WebAssembly runtime.
 
 ## Why this wins: the FHE-only insight
 
@@ -114,10 +135,12 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 
 ## Deployed (Sepolia)
 
-| Contract | Address |
-|---|---|
-| **NdimbalPool** | [`0x579Dc066A0E51bFe39cc507ebe55851729587f0c`](https://sepolia.etherscan.io/address/0x579Dc066A0E51bFe39cc507ebe55851729587f0c) |
-| Confidential token (demo cUSDT) | [`0x9dA75735C1C762FFf8F14cB63bA07De9a378318b`](https://sepolia.etherscan.io/address/0x9dA75735C1C762FFf8F14cB63bA07De9a378318b) |
+| Contract | Address | Notes |
+|---|---|---|
+| **NdimbalPool** (production-config) | [`0x579Dc066A0E51bFe39cc507ebe55851729587f0c`](https://sepolia.etherscan.io/address/0x579Dc066A0E51bFe39cc507ebe55851729587f0c) | 1-day rounds, **source-verified** on Etherscan |
+| Confidential token (demo cUSDT) | [`0x9dA75735C1C762FFf8F14cB63bA07De9a378318b`](https://sepolia.etherscan.io/address/0x9dA75735C1C762FFf8F14cB63bA07De9a378318b) | for the production-config pool |
+| **NdimbalPool** (live-demo instance) | [`0xb1dCe02970147Da2aD75af23B52A62B820b65E0B`](https://sepolia.etherscan.io/address/0xb1dCe02970147Da2aD75af23B52A62B820b65E0B) | 10-min rounds, powers the hosted dApp so anyone can play a full draw |
+| Confidential token (live-demo) | [`0x31657AA0C4f1fFF049818FA4Da00339c580f6C33`](https://sepolia.etherscan.io/address/0x31657AA0C4f1fFF049818FA4Da00339c580f6C33) | for the live-demo pool |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
