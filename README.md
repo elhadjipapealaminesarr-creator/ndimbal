@@ -14,7 +14,7 @@ draw awards the yield-funded prize to one saver.
 > each saver privately pre-sets what share of a win they'd give back to a community fund — so
 > **generosity happens with zero social pressure**, and a lottery becomes mutual aid.
 
-**▶ Live demo (nothing to install):** **https://raw.githack.com/elhadjipapealaminesarr-creator/ndimbal/main/demo.html** — bilingual (EN/FR), animated. Or open [`demo.html`](./demo.html) locally.
+**▶ Live demo (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated. Or open [`demo.html`](./demo.html) locally.
 
 > **Honest design note, up front:** the draw uses a fully-encrypted **weighted argmax**
 > (`ticket = balance × protocol-random`), so odds *strictly increase* with your deposit while the

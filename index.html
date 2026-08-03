@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NDIMBAL — save without loss, win prizes, lift your community · privately</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230E5A4A'/%3E%3Cellipse cx='32' cy='32' rx='13' ry='19' fill='%23E4A24C'/%3E%3Cpath d='M32 16 C25 24,25 40,32 48 C39 40,39 24,32 16Z' fill='%230A4638'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#0E5A4A">
+<meta property="og:title" content="NDIMBAL — save without loss, win prizes, lift your community, privately">
+<meta property="og:description" content="A no-loss prize-savings pool where winning lifts the whole community — confidentially.">
+<style>
+  :root{
+    --bg:#FBF7F0; --card:#FFFFFF; --ink:#17233A; --muted:#6E7688; --line:#EEE4D6;
+    --green:#0E5A4A; --green-d:#0A4638; --green-l:#2E8A72; --soft:#E4EFEA;
+    --gold:#E4A24C; --gold-d:#B87A28; --terra:#C75B39; --plum:#5B3E7A;
+    --r:26px; --r-sm:16px; --shadow:0 18px 44px rgba(23,35,58,.12); --shadow-s:0 8px 22px rgba(23,35,58,.08);
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0}
+  body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 20px}
+  .pattern{height:6px;background:repeating-linear-gradient(135deg,var(--green) 0 14px,var(--gold) 14px 20px,var(--terra) 20px 28px)}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;background:rgba(251,247,240,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.05em;font-size:1.25rem;color:var(--green)}
+  .brand .b{color:var(--gold-d)}
+  .brand svg{width:34px;height:34px;flex:none}
+  .nav-r{display:flex;align-items:center;gap:12px}
+  .pill-tag{display:none}
+  @media(min-width:620px){.pill-tag{display:inline-flex;align-items:center;gap:6px;background:var(--soft);color:var(--green-d);font-weight:700;font-size:.8rem;padding:6px 12px;border-radius:999px}}
+  .lang{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-weight:800;font-size:.8rem;background:#fff}
+  .lang button{border:0;background:transparent;color:var(--muted);padding:6px 13px;cursor:pointer;font-family:inherit;font-weight:800}
+  .lang button.on{background:var(--green);color:#fff}
+
+  /* hero */
+  .hero{position:relative;overflow:hidden;padding:54px 0 40px}
+  .blob{position:absolute;border-radius:50%;filter:blur(46px);opacity:.5;z-index:0}
+  .b1{width:360px;height:360px;background:#bfe3cf;top:-90px;right:-70px}
+  .b2{width:300px;height:300px;background:#f5d59a;bottom:-120px;left:-90px;opacity:.55}
+  .b3{width:200px;height:200px;background:#f0b7a3;top:120px;left:44%;opacity:.4}
+  .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1fr;gap:30px;align-items:center}
+  @media(min-width:860px){.hero-grid{grid-template-columns:1.1fr .9fr}}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow-s);color:var(--green-d);font-weight:700;font-size:.82rem;padding:7px 14px;border-radius:999px}
+  .eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--terra);box-shadow:0 0 0 4px rgba(199,91,57,.18)}
+  h1{font-size:clamp(2.1rem,5.4vw,3.35rem);line-height:1.06;letter-spacing:-.02em;margin:16px 0 0;font-weight:800}
+  h1 .hl{color:var(--green);position:relative;white-space:nowrap}
+  h1 .hl2{color:var(--gold-d)}
+  .sub{color:var(--muted);font-size:1.08rem;max-width:33ch;margin:16px 0 0}
+  .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+  .trust{display:flex;align-items:center;gap:8px;margin-top:18px;color:var(--muted);font-size:.86rem;font-weight:600}
+  .trust .ok{color:var(--green)}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:800;font-family:inherit;font-size:1rem;cursor:pointer;border:1px solid transparent;border-radius:999px;padding:13px 22px;transition:transform .07s,box-shadow .18s,background .18s;text-decoration:none}
+  .btn:active{transform:translateY(1px)}
+  .btn.p{background:var(--green);color:#fff;box-shadow:0 10px 24px rgba(14,90,74,.28)}
+  .btn.p:hover{background:var(--green-d)}
+  .btn.o{background:#fff;color:var(--green-d);border-color:var(--line);box-shadow:var(--shadow-s)}
+  .btn.gold{background:linear-gradient(180deg,#efb562,var(--gold));color:#3a2a10;box-shadow:0 10px 24px rgba(184,122,40,.28);width:100%}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--green-d);font-weight:700}
+  .btn.block{width:100%}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+
+  /* hero art */
+  .art{position:relative;display:flex;justify-content:center}
+  .art svg{width:min(360px,86vw);height:auto;filter:drop-shadow(0 24px 40px rgba(23,35,58,.16));animation:float 5s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+  /* pillars */
+  section{padding:22px 0}
+  .sec-h{text-align:center;max-width:640px;margin:0 auto 22px}
+  .sec-h h2{font-size:clamp(1.5rem,3.6vw,2.1rem);margin:0;letter-spacing:-.01em}
+  .sec-h p{color:var(--muted);margin:10px 0 0}
+  .pills{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(min-width:760px){.pills{grid-template-columns:repeat(4,1fr)}}
+  .pillc{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:18px;box-shadow:var(--shadow-s);transition:transform .15s,box-shadow .15s}
+  .pillc:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+  .pico{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.35rem;margin-bottom:12px}
+  .pillc h3{margin:0 0 4px;font-size:1.02rem}
+  .pillc p{margin:0;color:var(--muted);font-size:.88rem}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+  .stepc{background:linear-gradient(180deg,#fff,#fbf7ef);border:1px solid var(--line);border-radius:var(--r-sm);padding:18px;font-size:.92rem;box-shadow:var(--shadow-s)}
+  .stepc b{color:var(--green-d)}
+
+  /* demo cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:22px;margin:16px 0}
+  .card h2{font-size:1.12rem;margin:0 0 6px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1;min-width:120px}
+  label{font-weight:600;font-size:.9rem;display:block;margin-bottom:6px}
+  input[type=number]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);font-size:1rem;font-family:inherit;background:#fff}
+  input[type=range]{width:100%;accent-color:var(--green)}
+  .fhe{display:inline-flex;align-items:center;gap:6px;background:var(--soft);color:var(--green-d);font-weight:700;font-size:.76rem;padding:4px 10px;border-radius:999px}
+  .muted{color:var(--muted)} .small{font-size:.86rem}
+  .stat{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line)}
+  .stat:last-child{border-bottom:0}
+  .pill{font-weight:800}
+  .pop{animation:pop .5s ease}
+  @keyframes pop{0%{transform:scale(1)}35%{transform:scale(1.22);color:var(--green)}100%{transform:scale(1)}}
+  .savers{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .saver{display:flex;justify-content:space-between;align-items:center;background:#faf6ee;border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 13px}
+  .lock{font-family:ui-monospace,Menlo,monospace;color:var(--gold-d);font-size:.85rem}
+  .you{outline:2px solid var(--green);outline-offset:1px}
+  .win-row{background:#e4efea !important}
+  .reveal{text-align:center;padding:26px;border-radius:var(--r);margin-top:12px;display:none}
+  .reveal.win{display:block;background:linear-gradient(180deg,#effaf3,#e4efea);border:1px solid #bfe3cf}
+  .reveal.lose{display:block;background:#faf6ee;border:1px solid var(--line)}
+  .reveal .big{font-size:1.5rem;font-weight:800}
+  .log{font-family:ui-monospace,Menlo,monospace;font-size:.82rem;background:#0d1b16;color:#bfe8d4;border-radius:var(--r-sm);padding:12px 14px;min-height:44px;white-space:pre-wrap;margin-top:12px}
+  .divider{height:1px;background:var(--line);margin:14px 0}
+  .impact{background:linear-gradient(180deg,#fff8ec,#fdf1dd);border:1px solid #f0dcb8;border-radius:var(--r-sm);padding:12px 14px;margin-top:12px;font-size:.9rem}
+  .badge{display:inline-block;background:var(--soft);color:var(--green-d);border-radius:8px;padding:2px 8px;font-weight:700;font-size:.8rem}
+
+  /* proof band */
+  .proof{background:linear-gradient(135deg,var(--green),var(--green-d));color:#eafff6;border-radius:var(--r);padding:26px;box-shadow:var(--shadow);text-align:center}
+  .proof h2{color:#fff;margin:0 0 6px}
+  .proof p{color:#cdeadd;margin:0 auto 16px;max-width:56ch}
+  .proof .btn.o{background:#fff;color:var(--green-d)}
+  .proof code{background:rgba(255,255,255,.14);padding:2px 8px;border-radius:7px;font-size:.9em}
+
+  footer{text-align:center;color:var(--muted);font-size:.86rem;padding:30px 0 50px}
+  footer .brand{justify-content:center;margin-bottom:8px}
+
+  .confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:99;pointer-events:none;border-radius:2px}
+  @keyframes fall{to{transform:translateY(105vh) rotate(720deg);opacity:.9}}
+
+  /* ---------- motion (PoolTogether-style, NDIMBAL flavour) ---------- */
+  @media (prefers-reduced-motion: no-preference){
+    .pattern{background-size:56px 100%;animation:stripe 3.5s linear infinite}
+    @keyframes stripe{to{background-position:56px 0}}
+    .blob{animation:drift 18s ease-in-out infinite}
+    .b1{animation-duration:19s}
+    .b2{animation-duration:24s;animation-direction:alternate}
+    .b3{animation-duration:15s;animation-delay:-4s}
+    @keyframes drift{0%{transform:translate(0,0) scale(1)}33%{transform:translate(34px,-26px) scale(1.08)}66%{transform:translate(-24px,20px) scale(.95)}100%{transform:translate(0,0) scale(1)}}
+    h1 .hl{background:linear-gradient(100deg,var(--green) 0 42%,#4fbf95 50%,var(--green) 58% 100%);background-size:230% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shine 5s linear infinite}
+    @keyframes shine{to{background-position:-230% 0}}
+    .art svg{animation:float 5s ease-in-out infinite, glowpulse 4.5s ease-in-out infinite}
+    @keyframes glowpulse{0%,100%{filter:drop-shadow(0 22px 38px rgba(23,35,58,.16))}50%{filter:drop-shadow(0 26px 54px rgba(228,162,76,.42))}}
+    .pillc .pico{animation:bob 3.4s ease-in-out infinite}
+    .pillc:nth-child(2) .pico{animation-delay:.4s}
+    .pillc:nth-child(3) .pico{animation-delay:.8s}
+    .pillc:nth-child(4) .pico{animation-delay:1.2s}
+    @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+    .btn.p:hover,.btn.gold:hover{transform:translateY(-2px)}
+    .reveal-up{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+    .reveal-up.in{opacity:1;transform:none}
+  }
+  /* floating cowries/coins rising through the hero */
+  .coins{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .coin{position:absolute;bottom:-8%;opacity:0;border-radius:3px;background:linear-gradient(180deg,#efb562,#d6912f);box-shadow:0 2px 6px rgba(184,122,40,.35)}
+  @media (prefers-reduced-motion: no-preference){ .coin{animation:rise linear infinite} }
+  @keyframes rise{0%{transform:translateY(0) rotate(0);opacity:0}12%{opacity:.65}88%{opacity:.65}100%{transform:translateY(-118vh) rotate(300deg);opacity:0}}
+</style>
+</head>
+<body>
+<div class="pattern"></div>
+
+<nav>
+  <div class="wrap nav-in">
+    <a class="brand" href="#top" style="text-decoration:none">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#0E5A4A"/><g fill="#E4A24C" opacity=".5"><circle cx="32" cy="9" r="1.9"/><circle cx="51" cy="15" r="1.9"/><circle cx="56" cy="32" r="1.9"/><circle cx="51" cy="49" r="1.9"/><circle cx="32" cy="55" r="1.9"/><circle cx="13" cy="49" r="1.9"/><circle cx="8" cy="32" r="1.9"/><circle cx="13" cy="15" r="1.9"/></g><ellipse cx="32" cy="32" rx="12" ry="18" fill="#E4A24C"/><path d="M32 16 C25 24,25 40,32 48 C39 40,39 24,32 16Z" fill="#0A4638"/></svg>
+      <span>NDIM<span class="b">BAL</span></span>
+    </a>
+    <div class="nav-r">
+      <span class="pill-tag" data-t="navPill"></span>
+      <div class="lang"><button id="en" class="on">EN</button><button id="fr">FR</button></div>
+    </div>
+  </div>
+</nav>
+
+<span id="top"></span>
+<header class="hero">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <div class="coins" id="coins"></div>
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot"></span><span data-t="heroEyebrow"></span></span>
+      <h1 data-t="heroTitle"></h1>
+      <p class="sub" data-t="heroSub"></p>
+      <div class="cta">
+        <a class="btn p" href="#demo" data-t="heroCta1"></a>
+        <a class="btn o" id="chainBtn" href="https://sepolia.etherscan.io/address/0x49295aF16723bb49CEd8E9B82b53d6E653a18625" target="_blank" rel="noopener" data-t="heroCta2"></a>
+      </div>
+      <div class="trust"><span class="ok">✔</span><span data-t="heroTrust"></span></div>
+    </div>
+    <div class="art">
+      <svg viewBox="0 0 320 300" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="pot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0E5A4A"/><stop offset="1" stop-color="#0A4638"/></linearGradient>
+          <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0B65C"/><stop offset="1" stop-color="#D6912F"/></linearGradient>
+          <radialGradient id="halo" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="#fff3d6" stop-opacity=".9"/><stop offset="1" stop-color="#fff3d6" stop-opacity="0"/></radialGradient>
+        </defs>
+        <circle cx="160" cy="140" r="140" fill="url(#halo)"/>
+        <!-- sparkles -->
+        <g fill="#E4A24C"><path d="M60 60l4 10 10 4-10 4-4 10-4-10-10-4 10-4z"/><path d="M262 78l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" opacity=".8"/><path d="M250 190l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" opacity=".6"/></g>
+        <!-- calabash pot -->
+        <ellipse cx="160" cy="210" rx="96" ry="70" fill="url(#pot)"/>
+        <ellipse cx="160" cy="150" rx="96" ry="34" fill="#0A4638"/>
+        <ellipse cx="160" cy="146" rx="88" ry="28" fill="#0E5A4A"/>
+        <!-- overflowing cowries / coins -->
+        <g>
+          <ellipse cx="120" cy="120" rx="20" ry="27" fill="url(#coin)"/><path d="M120 100 C112 108,112 132,120 140 C128 132,128 108,120 100Z" fill="#0A4638"/>
+          <ellipse cx="164" cy="104" rx="22" ry="29" fill="url(#coin)"/><path d="M164 82 C155 91,155 117,164 126 C173 117,173 91,164 82Z" fill="#0A4638"/>
+          <ellipse cx="206" cy="122" rx="19" ry="26" fill="url(#coin)"/><path d="M206 102 C198 110,198 134,206 142 C214 134,214 110,206 102Z" fill="#0A4638"/>
+        </g>
+        <!-- confidential padlock badge -->
+        <g transform="translate(214,196)">
+          <circle cx="0" cy="0" r="30" fill="#fff" stroke="#EEE4D6"/>
+          <rect x="-13" y="-4" width="26" height="20" rx="5" fill="#0E5A4A"/>
+          <path d="M-8 -4 v-6 a8 8 0 0 1 16 0 v6" fill="none" stroke="#0E5A4A" stroke-width="4"/>
+          <circle cx="0" cy="5" r="3" fill="#E4A24C"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- pillars -->
+  <section>
+    <div class="sec-h"><h2 data-t="pillsTitle"></h2><p data-t="pillsSub"></p></div>
+    <div class="pills">
+      <div class="pillc"><div class="pico" style="background:#e4efea">💰</div><h3 data-t="p1t"></h3><p data-t="p1d"></p></div>
+      <div class="pillc"><div class="pico" style="background:#fdeecf">🎁</div><h3 data-t="p2t"></h3><p data-t="p2d"></p></div>
+      <div class="pillc"><div class="pico" style="background:#f3e0d8">🛟</div><h3 data-t="p3t"></h3><p data-t="p3d"></p></div>
+      <div class="pillc"><div class="pico" style="background:#e7e0f0">🔒</div><h3 data-t="p4t"></h3><p data-t="p4d"></p></div>
+    </div>
+  </section>
+
+  <!-- how it works -->
+  <section>
+    <div class="sec-h"><h2 data-t="howTitle"></h2></div>
+    <div class="steps">
+      <div class="stepc" data-t="s1"></div>
+      <div class="stepc" data-t="s2"></div>
+      <div class="stepc" data-t="s3"></div>
+    </div>
+  </section>
+
+  <!-- interactive demo -->
+  <section id="demo">
+    <div class="sec-h"><h2 data-t="demoTitle"></h2><p data-t="demoSub"></p></div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 data-t="savings"></h2><span class="fhe" data-t="encClient"></span>
+      </div>
+      <div class="row">
+        <div class="grow"><label data-t="amount"></label><input id="dep" type="number" min="0" value="600"></div>
+        <div style="align-self:flex-end;display:flex;gap:8px">
+          <button class="btn p" id="depBtn" data-t="deposit"></button>
+          <button class="btn ghost" id="wdrBtn" data-t="withdraw"></button>
+        </div>
+      </div>
+      <div class="stat" style="margin-top:6px"><span data-t="yourBal"></span><span class="pill" id="mybal">0 cUSDT</span></div>
+      <p class="small muted" style="margin:8px 0 0" data-t="noloss"></p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 data-t="dial"></h2><span class="fhe" data-t="onlyYou"></span>
+      </div>
+      <label><span data-t="dialQ"></span> <b><span id="pctv">30</span>%</b></label>
+      <input id="pct" type="range" min="0" max="100" value="30">
+      <p class="small muted" style="margin:8px 0 0" data-t="dialNote"></p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 data-t="sponsor"></h2><span class="fhe" data-t="blindly"></span>
+      </div>
+      <div class="row">
+        <div class="grow"><label data-t="yieldAdd"></label><input id="spon" type="number" min="0" value="250"></div>
+        <div style="align-self:flex-end;min-width:150px"><button class="btn gold" id="sponBtn" data-t="fund"></button></div>
+      </div>
+      <p class="small muted" style="margin:8px 0 0" data-t="sponsorNote"></p>
+    </div>
+
+    <div class="card">
+      <h2><span data-t="pool"></span> #<span id="round">1</span></h2>
+      <div class="stat"><span data-t="participants"></span><span class="pill" id="pcount">4</span></div>
+      <div class="stat"><span data-t="prize"></span><span class="pill" id="prize">500 cUSDT</span></div>
+      <div class="stat"><span data-t="communityFund"></span><span class="pill" id="fund">0 cUSDT</span></div>
+      <div class="savers" id="savers"></div>
+      <div class="divider"></div>
+      <button class="btn gold" id="drawBtn" data-t="runDraw"></button>
+      <div class="log" id="log"></div>
+      <div class="reveal" id="reveal"></div>
+      <div class="impact" id="impact" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- on-chain proof -->
+  <section>
+    <div class="proof">
+      <h2 data-t="proofTitle"></h2>
+      <p data-t="proofText"></p>
+      <a class="btn o" href="https://sepolia.etherscan.io/address/0x49295aF16723bb49CEd8E9B82b53d6E653a18625" target="_blank" rel="noopener" data-t="proofCta"></a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="brand"><svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#0E5A4A"/><ellipse cx="32" cy="32" rx="12" ry="18" fill="#E4A24C"/><path d="M32 16 C25 24,25 40,32 48 C39 40,39 24,32 16Z" fill="#0A4638"/></svg><span>NDIM<span class="b">BAL</span></span></div>
+    <p data-t="footTech" style="margin:0 auto;max-width:60ch"></p>
+    <p style="margin:8px 0 0"><b>El Hadji Pape Alamine Sarr</b> · Dakar</p>
+  </div>
+</footer>
+
+<script>
+  const CONTRACT = "0x49295aF16723bb49CEd8E9B82b53d6E653a18625";
+  const T = {
+    en:{
+      navPill:'🛟 No-loss savings',
+      heroEyebrow:'Confidential prize savings',
+      heroTitle:'Save without loss.<br><span class="hl">Win prizes.</span> <span class="hl2">Lift your community.</span>',
+      heroSub:'A no-loss savings pool where a lucky saver wins the yield each round — and can quietly share it back. All of it <b>private</b>: balances, the draw, even your generosity.',
+      heroCta1:'▶ Try the live demo',
+      heroCta2:'⛓ See it on-chain',
+      heroTrust:'Deployed & source-verified on-chain · your principal is never at risk',
+      pillsTitle:'Four promises. The last one changes everything.',
+      pillsSub:'The first three are classic prize-savings. The fourth is only possible with confidential computing.',
+      p1t:'Deposit', p1d:'Put in a confidential token. Bigger deposit, better odds.',
+      p2t:'Win prizes', p2d:'Each round the pooled yield goes to one lucky saver.',
+      p3t:'No loss', p3d:'Withdraw your principal any time. You only ever risk the yield.',
+      p4t:'Private', p4d:'Balances, the draw and your give-back stay encrypted end-to-end.',
+      howTitle:'How it works',
+      s1:'<b>1. Encrypt</b> — your deposit and your give-back % are encrypted on your device. 🔒',
+      s2:'<b>2. Compute on ciphertext</b> — the draw runs on encrypted balances; even the pool total never leaks.',
+      s3:'<b>3. Only you decrypt</b> — the winner alone learns they won, and the draw stays verifiable on-chain.',
+      demoTitle:'Try it yourself', demoSub:'A <b>simulated</b> in-browser walk-through, to show the flow of one confidential round. The real logic runs in the on-chain contract — verified below.',
+      savings:'Your savings (Awa)', encClient:'🔒 encrypted on device',
+      amount:'Amount (cUSDT)', deposit:'Deposit', withdraw:'Withdraw',
+      yourBal:'Your balance in the pool 🔒',
+      noloss:'Your principal stays yours: <b>withdrawable any time</b> (no loss). Only the <b>yield</b> is at play.',
+      dial:'Your solidarity dial', onlyYou:'🔒 nobody sees it but you',
+      dialQ:'If you win, what share of your prize goes back to the community?',
+      dialNote:"<b>NDIMBAL's unique angle:</b> your choice is <b>encrypted</b>. No social pressure — just your true generosity. <i>Impossible without confidential computing.</i>",
+      sponsor:'Sponsor — fund the prize', blindly:'🔒 without seeing any balance or the winner',
+      yieldAdd:'Yield / donation to add to the prize (cUSDT)', fund:'Fund the prize',
+      sponsorNote:'An NGO or yield source can top up the pot <b>blindly</b> — and get a verifiable <b>impact receipt</b> below, without surveilling anyone.',
+      pool:'The pool — round', participants:'Participants', prize:'Round prize 🔒', communityFund:'Community fund (cumulative)',
+      runDraw:'🎲 Run the confidential draw', nextRound:'→ Next round',
+      logReady:'Ready. The draw runs on <b>encrypted balances</b> — even the pool total never leaks.',
+      depOk:v=>`✅ Encrypted deposit (${v} cUSDT). Balance withdrawable any time.`,
+      wdrOk:v=>`↩️ Withdrew ${v} cUSDT. <b>No loss</b> — your principal is yours.`,
+      sponOk:v=>`💛 The sponsor topped up the prize by ${v} cUSDT — <b>blindly</b> (no balance, no winner visible).`,
+      needDep:'⚠️ Deposit first to join the draw.',
+      steps:['→ Randomness <b>generated by the protocol</b> (un-grindable)…','→ ticket_i = balance_i × random  <span class="fhe">🔒 on encrypted data</span>','→ Winner = argmax(tickets)  <span class="fhe">🔒</span>','→ Each saver gets a "did I win?" flag <b>only they</b> can decrypt…'],
+      won:(prize,pct,give,keep)=>`<div class="big">🎉 You won!</div><p>Prize: <b>${prize} cUSDT</b>. Your private dial (<b>${pct}%</b>) sends <b>${give} cUSDT</b> to the community — you keep <b>${keep} cUSDT</b>.</p><p class="small muted">Nobody saw your generosity; only the <b>aggregate</b> fund is public. That's NDIMBAL.</p>`,
+      lost:'<div class="big">Not this time 🤞</div><p>Someone else won — <b>but you don\'t know who</b> (their result stays encrypted), and <b>your principal is intact</b>. Try again!</p>',
+      logWon:'✅ Draw done. You alone could decrypt your result. The others stay 🔒.',
+      logLost:'✅ Draw done. Only the winner knows. Your deposit is still yours.',
+      winner:'🎉 WINNER', encTicket:'🔒 encrypted ticket', encRes:'🔒 encrypted',
+      impact:v=>`🧾 <b>Impact receipt</b> — total sent to the community (all rounds): <b>${v} cUSDT</b>. Verifiable on-chain, without exposing any individual's generosity.`,
+      proofTitle:'Not a mockup — it lives on-chain',
+      proofText:'The NdimbalPool contract is deployed and source-verified on a public testnet. Read every line, replay the fairness harness, check the transactions yourself.',
+      proofCta:'⛓ View the verified contract',
+      footTech:'No-loss prize savings on a confidential smart contract. Draw = argmax of balance × protocol randomness · winner-only decrypt · verifiable on-chain. Open source (BSD-3-Clause-Clear).'
+    },
+    fr:{
+      navPill:'🛟 Épargne sans perte',
+      heroEyebrow:'Épargne-prix confidentielle',
+      heroTitle:'Épargne sans perte.<br><span class="hl">Gagne des prix.</span> <span class="hl2">Soulève ta communauté.</span>',
+      heroSub:"Un pool d'épargne sans perte où un épargnant chanceux remporte le rendement à chaque tour — et peut en reverser une part, discrètement. Le tout <b>en secret</b> : les soldes, le tirage, même ta générosité.",
+      heroCta1:'▶ Essayer la démo',
+      heroCta2:'⛓ Voir on-chain',
+      heroTrust:'Déployé & vérifié on-chain · ton capital n’est jamais à risque',
+      pillsTitle:'Quatre promesses. La dernière change tout.',
+      pillsSub:'Les trois premières, c’est l’épargne-prix classique. La quatrième n’est possible qu’avec le calcul confidentiel.',
+      p1t:'Déposer', p1d:'Dépose un token confidentiel. Plus le dépôt est gros, meilleures sont les chances.',
+      p2t:'Gagner des prix', p2d:'À chaque tour, le rendement du pool va à un épargnant chanceux.',
+      p3t:'Sans perte', p3d:'Retire ton capital quand tu veux. Tu ne risques que le rendement.',
+      p4t:'Confidentiel', p4d:'Soldes, tirage et ton don restent chiffrés de bout en bout.',
+      howTitle:'Comment ça marche',
+      s1:'<b>1. Chiffrer</b> — ton dépôt et ton % de don sont chiffrés sur ton appareil. 🔒',
+      s2:'<b>2. Calcul sur chiffré</b> — le tirage tourne sur des soldes chiffrés ; même le total du pool ne fuit pas.',
+      s3:'<b>3. Toi seul déchiffres</b> — le gagnant seul apprend qu’il a gagné, et le tirage reste vérifiable on-chain.',
+      demoTitle:'Essaie toi-même', demoSub:'Un parcours <b>simulé</b> dans ton navigateur, pour montrer le déroulé d’un tour confidentiel. La vraie logique tourne dans le contrat on-chain — vérifié plus bas.',
+      savings:'Ton épargne (Awa)', encClient:'🔒 chiffré sur l’appareil',
+      amount:'Montant (cUSDT)', deposit:'Déposer', withdraw:'Retirer',
+      yourBal:'Ton solde dans le pool 🔒',
+      noloss:'Ton capital reste à toi : <b>retirable à tout moment</b> (no-loss). Seul le <b>rendement</b> est mis en jeu.',
+      dial:'Ton cadran de solidarité', onlyYou:'🔒 personne ne le voit, sauf toi',
+      dialQ:'Si tu gagnes, quelle part de ton prix reverses-tu à la communauté ?',
+      dialNote:"<b>L'angle unique de NDIMBAL :</b> ton choix est <b>chiffré</b>. Pas de pression sociale — juste ta vraie générosité. <i>Impossible sans calcul confidentiel.</i>",
+      sponsor:'Sponsor — financer le prix', blindly:'🔒 sans voir aucun solde ni le gagnant',
+      yieldAdd:'Rendement / don à ajouter au prix (cUSDT)', fund:'Abonder le prix',
+      sponsorNote:'Une ONG ou une source de rendement peut abonder <b>en aveugle</b> — et recevoir plus bas un <b>reçu d’impact</b> vérifiable, sans surveiller personne.',
+      pool:'Le pot commun — round', participants:'Participants', prize:'Prix du round 🔒', communityFund:'Fonds communautaire (cumulé)',
+      runDraw:'🎲 Lancer le tirage confidentiel', nextRound:'→ Round suivant',
+      logReady:'Prêt. Le tirage s’exécutera sur des <b>soldes chiffrés</b> — même le total ne fuit jamais.',
+      depOk:v=>`✅ Dépôt chiffré (${v} cUSDT). Solde retirable à tout moment.`,
+      wdrOk:v=>`↩️ Retrait de ${v} cUSDT. <b>Aucune perte</b> — ton capital t'appartient.`,
+      sponOk:v=>`💛 Le sponsor a abondé le prix de ${v} cUSDT — <b>en aveugle</b> (aucun solde, aucun gagnant visible).`,
+      needDep:'⚠️ Dépose d’abord pour participer au tirage.',
+      steps:['→ Aléa <b>généré par le protocole</b> (ininfluençable)…','→ ticket_i = solde_i × aléa  <span class="fhe">🔒 sur données chiffrées</span>','→ Gagnant = argmax(tickets)  <span class="fhe">🔒</span>','→ Chaque épargnant reçoit un drapeau « gagné ? » que <b>lui seul</b> déchiffre…'],
+      won:(prize,pct,give,keep)=>`<div class="big">🎉 Tu as gagné !</div><p>Prix : <b>${prize} cUSDT</b>. Ton cadran privé (<b>${pct}%</b>) reverse <b>${give} cUSDT</b> à la communauté — tu gardes <b>${keep} cUSDT</b>.</p><p class="small muted">Personne n'a vu ta générosité ; seul l'<b>agrégat</b> du fonds est public. C'est ça, NDIMBAL.</p>`,
+      lost:'<div class="big">Pas cette fois 🤞</div><p>Un autre a gagné — <b>mais tu ne sais pas qui</b> (résultat chiffré), et <b>ton capital est intact</b>. Retente !</p>',
+      logWon:'✅ Tirage terminé. Toi seule as pu déchiffrer ton résultat. Les autres restent 🔒.',
+      logLost:'✅ Tirage terminé. Le gagnant est le seul à le savoir. Ton dépôt est toujours à toi.',
+      winner:'🎉 GAGNANT', encTicket:'🔒 ticket chiffré', encRes:'🔒 chiffré',
+      impact:v=>`🧾 <b>Reçu d'impact</b> — total reversé à la communauté (tous rounds) : <b>${v} cUSDT</b>. Vérifiable on-chain, sans exposer la générosité d'aucun individu.`,
+      proofTitle:'Pas une maquette — c’est en ligne on-chain',
+      proofText:'Le contrat NdimbalPool est déployé et vérifié sur un testnet public. Lis chaque ligne, rejoue le harnais d’équité, vérifie les transactions toi-même.',
+      proofCta:'⛓ Voir le contrat vérifié',
+      footTech:'Épargne-prix sans perte sur un contrat confidentiel. Tirage = argmax de solde × aléa-protocole · gagnant seul déchiffre · vérifiable on-chain. Open source (BSD-3-Clause-Clear).'
+    }
+  };
+
+  let lang='en';
+  const others=[{name:"Modou",dep:300},{name:"Fatou",dep:150},{name:"Ibou",dep:900}];
+  const state={you:{name:"Awa",bal:0},pct:30,prize:500,fund:0,round:1,drawn:false,lastWinner:null};
+  const $=id=>document.getElementById(id);
+  const tr=()=>T[lang];
+
+  function applyStatic(){ document.querySelectorAll('[data-t]').forEach(el=>{ const v=tr()[el.dataset.t]; if(typeof v==='string') el.innerHTML=v; }); }
+  function setPill(id,txt){ const e=$(id); e.textContent=txt; e.classList.remove("pop"); void e.offsetWidth; e.classList.add("pop"); }
+  const money=n=>n+" cUSDT";
+
+  function renderSavers(winnerIdx){
+    const all=[{name:state.you.name,dep:state.you.bal,you:true},...others];
+    $("pcount").textContent=all.filter(s=>s.dep>0).length;
+    $("savers").innerHTML=all.map((s,i)=>{
+      const won=winnerIdx!=null&&i===winnerIdx;
+      const status=winnerIdx==null?`<span class="lock">${tr().encTicket}</span>`
+        :(s.you?(won?`<b style="color:var(--green)">${tr().winner}</b>`:'—'):`<span class="lock">${tr().encRes}</span>`);
+      return `<div class="saver ${s.you?'you':''} ${won&&s.you?'win-row':''}"><span><b>${s.name}</b>${s.you?' (you)':''} · ${s.dep} cUSDT</span>${status}</div>`;
+    }).join("");
+  }
+  function refreshDynamic(){
+    setPill("mybal",money(state.you.bal)); setPill("prize",money(state.prize)); setPill("fund",money(state.fund));
+    $("drawBtn").innerHTML=state.drawn?tr().nextRound:tr().runDraw;
+    if(state.fund>0){ $("impact").style.display="block"; $("impact").innerHTML=tr().impact(state.fund); }
+    renderSavers(state.drawn?state.lastWinner:null);
+  }
+  function setLang(l){ lang=l; document.documentElement.lang=l; $("en").classList.toggle("on",l==='en'); $("fr").classList.toggle("on",l==='fr'); applyStatic(); $("log").innerHTML=tr().logReady; refreshDynamic(); }
+
+  $("en").onclick=()=>setLang('en'); $("fr").onclick=()=>setLang('fr');
+  $("pct").addEventListener("input",e=>{state.pct=+e.target.value;$("pctv").textContent=state.pct;});
+  $("depBtn").onclick=()=>{const v=+$("dep").value||0;if(v<=0)return;state.you.bal+=v;setPill("mybal",money(state.you.bal));$("log").innerHTML=tr().depOk(v);renderSavers(null);};
+  $("wdrBtn").onclick=()=>{const v=Math.min(+$("dep").value||0,state.you.bal);if(v<=0)return;state.you.bal-=v;setPill("mybal",money(state.you.bal));$("log").innerHTML=tr().wdrOk(v);renderSavers(null);};
+  $("sponBtn").onclick=()=>{const v=+$("spon").value||0;if(v<=0)return;state.prize+=v;setPill("prize",money(state.prize));$("log").innerHTML=tr().sponOk(v);};
+
+  function confetti(){const c=["#0E5A4A","#E4A24C","#C75B39","#bfe3cf"];for(let i=0;i<90;i++){const e=document.createElement("div");e.className="confetti";e.style.left=Math.random()*100+"vw";e.style.background=c[i%c.length];e.style.animation=`fall ${1+Math.random()*1.5}s ${Math.random()*.4}s linear forwards`;document.body.appendChild(e);setTimeout(()=>e.remove(),2600);}}
+
+  $("drawBtn").onclick=async()=>{
+    if(state.you.bal<=0){$("log").innerHTML=tr().needDep;return;}
+    if(state.drawn){state.round++;state.drawn=false;state.prize=500;state.lastWinner=null;$("round").textContent=state.round;$("reveal").className="reveal";refreshDynamic();$("log").innerHTML=tr().logReady;return;}
+    $("drawBtn").disabled=true;
+    for(const s of tr().steps){$("log").innerHTML=s;await new Promise(r=>setTimeout(r,650));}
+    const all=[{name:state.you.name,dep:state.you.bal,you:true},...others.map(o=>({...o}))];
+    let best=-1,bs=-1; all.forEach((s,i)=>{const sc=s.dep*Math.random();if(sc>bs){bs=sc;best=i;}});
+    state.drawn=true;state.lastWinner=best;renderSavers(best);
+    const rev=$("reveal");
+    if(all[best].you){const give=Math.round(state.prize*state.pct/100),keep=state.prize-give;state.fund+=give;setPill("fund",money(state.fund));$("impact").style.display="block";$("impact").innerHTML=tr().impact(state.fund);rev.className="reveal win";rev.innerHTML=tr().won(state.prize,state.pct,give,keep);$("log").innerHTML=tr().logWon;confetti();}
+    else{rev.className="reveal lose";rev.innerHTML=tr().lost;$("log").innerHTML=tr().logLost;}
+    $("drawBtn").disabled=false;$("drawBtn").innerHTML=tr().nextRound;
+  };
+
+  setLang('en');
+
+  // floating cowries in the hero
+  (function(){
+    const wrap=$("coins"); if(!wrap) return;
+    for(let i=0;i<16;i++){
+      const c=document.createElement("span"); c.className="coin";
+      const s=8+Math.random()*10; c.style.width=s+"px"; c.style.height=(s*1.4)+"px";
+      c.style.left=(Math.random()*100)+"%";
+      c.style.animationDuration=(9+Math.random()*11)+"s";
+      c.style.animationDelay=(-Math.random()*14)+"s";
+      wrap.appendChild(c);
+    }
+  })();
+
+  // gentle scroll-reveal (respects reduced-motion via CSS)
+  (function(){
+    const els=[...document.querySelectorAll('.sec-h, .pillc, .stepc, .card, .proof')];
+    els.forEach(e=>e.classList.add('reveal-up'));
+    if(!('IntersectionObserver' in window)){ els.forEach(e=>e.classList.add('in')); return; }
+    const io=new IntersectionObserver((ents)=>{ents.forEach(en=>{if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target);}})},{threshold:.12});
+    els.forEach(e=>io.observe(e));
+  })();
+</script>
+</body>
+</html>
