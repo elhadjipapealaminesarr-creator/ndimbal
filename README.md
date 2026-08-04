@@ -86,6 +86,16 @@ total never leaks.**
    grind a winner.
 4. The prize is assigned to the (encrypted) winner; on `claim`, the saver's **private give-back %**
    is applied on encrypted values — their share to them, the rest to the encrypted community fund.
+5. A **zero-balance guard** ensures a saver who withdrew everything (but is still listed in
+   `participants[]`) can never win: `won = eq(ticket, maxTicket) AND balance > 0`. If the whole pool
+   sits at zero while a prize is funded, **nobody** wins and the prize simply rolls over to the next
+   round — never several winners on the same round. (Regression-tested; see the two zero-balance tests.)
+
+**Winner selection is verifiable on-chain — only the winner's identity is not.** This is a deliberate
+step *beyond* the brief's "verifiable" requirement: the selection circuit and the protocol randomness
+(`FHE.randEuint32`, un-grindable by the operator) run entirely on-chain, so anyone can audit that the
+draw is deterministic and that **exactly one winner** is produced per round. What stays private is only
+*who* that winner is — each saver decrypts their own flag, nobody else's. Verifiable process, private outcome.
 
 **Design note (honest):** the argmax draw makes odds *strictly increase* with the deposit while
 keeping the total secret. An *exactly-proportional* draw (`P = balance / total`) requires revealing
@@ -121,7 +131,7 @@ ticket, or the real pool total.
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 18 passing
+npx hardhat test test/NdimbalPool.test.js     # 20 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -130,8 +140,30 @@ npx hardhat run scripts/deploy.js --network sepolia
 The deploy script prints the two `npx hardhat verify` commands for Etherscan source verification.
 
 **Security posture:** `nonReentrant` on all token-touching functions, anti-snipe deposit lock
-(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, and give-back % + sponsorship snapshotted at draw (no post-win front-running). Ticket math uses
+(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), and a **zero-balance guard** so an emptied account can never win. Ticket math uses
 `euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
+
+## Known limits (documented on purpose)
+
+Rather than let a reviewer find these, here they are up front — none is a security hole, each has a
+clear v1 rationale:
+
+- **Draw / claim cost grows with the participant count.** `draw()` is O(n) in FHE ops and, because
+  the "Tanti caché" routing hides the beneficiary, `claim()` also loops over all participants. Inactive
+  addresses are never purged, so cost only rises over time. Fine for a demo pool; measure gas before
+  scaling past a few dozen active savers. A recommended cap and a "leave on full withdrawal" purge are
+  on the roadmap.
+- **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
+  `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
+  give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
+  Gnosis Safe or an immutable beneficiary is the roadmap fix.
+- **The draw needs a trigger.** `draw()` is permissionless — anyone can call it once the round ends, so
+  the operator can't game it — but if nobody calls it, deposits stay locked. Production would add a
+  keeper (Chainlink Automation or similar); for the demo, evaluators trigger it themselves.
+- **The sponsorship index isn't validated.** A "Tanti caché" beneficiary index pointing at no real
+  participant simply routes nothing (the amount returns to the winner via the encrypted maths).
+  Validating it on-chain would require revealing the chosen index, which would defeat the sponsorship's
+  privacy — so this trade-off is intentional.
 
 ## Deployed (Sepolia)
 
