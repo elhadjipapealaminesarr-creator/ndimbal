@@ -63,7 +63,7 @@
 ## Links to show / put in description
 - Live dApp: https://ndimbal-rho.vercel.app
 - Repo: https://github.com/elhadjipapealaminesarr-creator/ndimbal
-- Verified contract: https://sepolia.etherscan.io/address/0x579Dc066A0E51bFe39cc507ebe55851729587f0c
+- Verified contract: https://sepolia.etherscan.io/address/0x0814191C0cD9B7151437c515ac3618363D8a248b
 
 ---
 *El Hadji Pape Alamine Sarr — Dakar. NDIMBAL, part of the Kaddu family of confidential civic tools.*

@@ -16,7 +16,7 @@ draw awards the yield-funded prize to one saver.
 
 **▶ Live dApp — real on-chain transactions:** **https://ndimbal-rho.vercel.app** — connect MetaMask on Sepolia, mint demo tokens, deposit (encrypted in your browser), run the confidential draw, and **decrypt your own result** — nobody else can read it. A guided 1→6 walkthrough explains every step.
 
-**▶ Animated overview / explainer (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated marketing walkthrough. Or open [`demo.html`](./demo.html) locally.
+**▶ Animated overview / explainer (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated marketing walkthrough. Or open [`index.html`](./index.html) locally.
 
 > **Honest design note, up front:** the draw uses a fully-encrypted **weighted argmax**
 > (`ticket = balance × protocol-random`), so odds *strictly increase* with your deposit while the
