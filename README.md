@@ -148,11 +148,14 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 Rather than let a reviewer find these, here they are up front — none is a security hole, each has a
 clear v1 rationale:
 
-- **Draw / claim cost grows with the participant count.** `draw()` is O(n) in FHE ops and, because
-  the "Tanti caché" routing hides the beneficiary, `claim()` also loops over all participants. Inactive
-  addresses are never purged, so cost only rises over time. Fine for a demo pool; measure gas before
-  scaling past a few dozen active savers. A recommended cap and a "leave on full withdrawal" purge are
-  on the roadmap.
+- **Participant count is bounded by the fhEVM per-transaction budget.** `draw()` is O(n) in FHE ops
+  with a sequential `FHE.max` chain, and `claim()` also loops over all participants (to hide the
+  "Tanti caché" beneficiary). Beyond a certain `n`, a single `draw()`/`claim()` would exceed the
+  fhEVM **HCU (Homomorphic Complexity Units) / circuit-depth budget** allowed in one transaction — and
+  since inactive addresses are never purged, that cost only grows over time. **Recommended active-
+  participant cap: ~40–50 per round** on the current `@fhevm/solidity` 0.11.1 op budget; measure on
+  your target chain before scaling past that. A `MAX_PARTICIPANTS` require (hard cap) and a "leave on
+  full withdrawal" purge are on the roadmap.
 - **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
   `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
   give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
