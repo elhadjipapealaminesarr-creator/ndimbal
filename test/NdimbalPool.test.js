@@ -91,6 +91,39 @@ describe("NdimbalPool", function () {
     expect(winners).to.equal(1);
   });
 
+  // ---- zero-balance guard (regression test for the multiple-winner bug) ----
+  // If everyone withdraws before the draw but a prize is funded, every ticket == 0 == maxTicket.
+  // Without the `balance > 0` guard in draw(), FHE.eq(ticket, maxTicket) is true for ALL of them
+  // and each could claim the full pot. The guard must make this yield ZERO winners (prize rolls over).
+  it("nobody wins when the whole pool is at zero and a prize is funded", async function () {
+    const { pool, poolAddr, alice, bob, carol } = await standard();
+    await withdraw(pool, poolAddr, alice, 100);
+    await withdraw(pool, poolAddr, bob, 300);
+    await withdraw(pool, poolAddr, carol, 600); // all three now at a zero balance
+    await advanceToDraw();
+    await pool.draw();
+
+    let winners = 0;
+    for (const who of [alice, bob, carol]) {
+      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
+    }
+    expect(winners).to.equal(0); // guard holds: no zero-balance winner; the prize rolls over
+  });
+
+  it("still has exactly one winner when several savers are tied at a zero balance", async function () {
+    const { pool, poolAddr, alice, bob, carol } = await standard();
+    await withdraw(pool, poolAddr, alice, 100);
+    await withdraw(pool, poolAddr, bob, 300); // alice & bob at zero; carol keeps 600
+    await advanceToDraw();
+    await pool.draw();
+
+    let winners = 0;
+    for (const who of [alice, bob, carol]) {
+      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
+    }
+    expect(winners).to.equal(1); // carol; the two zero-balance savers can never tie-win
+  });
+
   it("no-loss: a saver can withdraw principal at any time", async function () {
     const { pool, poolAddr, alice } = await standard();
     await withdraw(pool, poolAddr, alice, 40);

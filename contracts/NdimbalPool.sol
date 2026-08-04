@@ -228,7 +228,15 @@ contract NdimbalPool is ZamaEthereumConfig {
         // pass 2: encrypted win flag + claimable prize (full pot to the winner)
         for (uint256 i = 0; i < n; i++) {
             address p = participants[i];
-            ebool won = FHE.eq(tickets[i], maxTicket);
+            // Guard: a saver with a zero balance (deposited then withdrew everything, but still
+            // listed in participants[]) must never win. Without this, if the whole pool sits at zero
+            // while a prize is funded, every ticket == 0 == maxTicket and everyone would "win" — the
+            // pot could then be claimed several times. With the guard, nobody wins and the prize
+            // rolls over to the next round. This also neutralises the (astronomically rare) exact tie.
+            ebool won = FHE.and(
+                FHE.eq(tickets[i], maxTicket),
+                FHE.gt(_bal(p), FHE.asEuint64(0))
+            );
             euint64 c = FHE.select(won, _prizePot, FHE.asEuint64(0));
             _won[r][p] = won;
             _claimable[r][p] = c;
