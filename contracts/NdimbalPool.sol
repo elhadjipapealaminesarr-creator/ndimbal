@@ -57,6 +57,7 @@ contract NdimbalPool is ZamaEthereumConfig {
     euint64 private _communityFund; // encrypted accrued donations
 
     mapping(uint256 => bool) public drawn;                        // one draw per round
+    mapping(uint256 => address[]) private _participantsAt;        // participant list frozen at draw time (per round)
     mapping(uint256 => mapping(address => ebool)) private _won;   // round => saver => encrypted win flag
     mapping(uint256 => mapping(address => euint64)) private _claimable;
     mapping(uint256 => mapping(address => bool)) private claimed; // one claim per saver per round; private so it leaks no "who claimed" metadata
@@ -202,8 +203,11 @@ contract NdimbalPool is ZamaEthereumConfig {
     /// @notice Withdraw your ENTIRE balance and leave the pool, freeing your participant slot. FHE can't
     ///         observe an encrypted-zero balance, so purging is voluntary — this is the explicit exit path
     ///         (it keeps draw()/claim() cheap and lets honest churn free capped slots).
-    /// @dev    Removal reindexes participants[] (swap-pop), which can invalidate a pending "Tanti caché"
-    ///         index another saver set by position; sponsorship-by-index is best-effort and re-settable.
+    /// @dev    Removal reindexes participants[] (swap-pop). The draw freezes the participant list, so this
+    ///         can no longer redirect a sponsorship AFTER a draw. It can still shift positions BEFORE a
+    ///         draw: a "Tanti caché" index set by position may then point at whoever was swapped into that
+    ///         slot. Sponsorship-by-index is therefore best-effort and re-settable until the draw; a
+    ///         per-address (not per-index) encoding is on the roadmap to close the pre-draw window too.
     function leave() external nonReentrant {
         require(isParticipant[msg.sender], "not in pool");
         euint64 bal = _bal(msg.sender);
@@ -235,8 +239,15 @@ contract NdimbalPool is ZamaEthereumConfig {
         FHE.allowTransient(amt, address(token));
         euint64 got = token.confidentialTransferFrom(msg.sender, address(this), amt);
         // Clamp the pot so the give-back math (c × pct) can never overflow euint64 in claim().
-        _prizePot = FHE.min(FHE.add(_prizePot, got), FHE.asEuint64(MAX_PRIZE));
+        euint64 newPot = FHE.add(_prizePot, got);
+        euint64 capped = FHE.min(newPot, FHE.asEuint64(MAX_PRIZE));
+        // Any amount above the cap is REFUNDED to the funder — never silently absorbed by the contract.
+        // (Encrypted, so it leaks nothing: excess is 0 unless the cap was actually hit.)
+        euint64 excess = FHE.sub(newPot, capped);
+        _prizePot = capped;
         FHE.allowThis(_prizePot);
+        FHE.allowTransient(excess, address(token));
+        token.confidentialTransfer(msg.sender, excess);
         emit PrizeFunded(msg.sender);
     }
 
@@ -249,8 +260,23 @@ contract NdimbalPool is ZamaEthereumConfig {
         uint256 r = round;
         require(!drawn[r], "already drawn");
         uint256 n = participants.length;
-        require(n > 0, "no participants");
         drawn[r] = true;
+
+        // Empty round: the pool is empty (e.g. everyone used leave()). We advance the clock and return
+        // instead of reverting. Reverting here was the "leave() deadlock": roundStart only moves inside
+        // draw(), so a stuck draw() would revert forever and freeze every future round. The funded prize
+        // just rolls over untouched to the next round.
+        if (n == 0) {
+            round = r + 1;
+            roundStart = uint64(block.timestamp);
+            emit DrawExecuted(r, 0);
+            return;
+        }
+
+        // Freeze the participant list for this round so claim() credits the exact people who were in the
+        // pool AT the draw. Without this, a leave() between draw and claim reindexes participants[] and a
+        // frozen "Tanti caché" index would credit whoever got swapped into that slot (see claim()).
+        _participantsAt[r] = participants;
 
         // Ticket math is done in euint128: balance(euint64) × rand(euint32) can reach ~2^96,
         // which would overflow euint64. Widening to euint128 keeps the weighting exact even for
@@ -341,9 +367,13 @@ contract NdimbalPool is ZamaEthereumConfig {
         euint64 userGets = FHE.sub(net, sponsorAmt);
 
         euint64 benIdx = _sIdxAt[r][msg.sender];
-        uint256 n = participants.length;
+        // Iterate the FROZEN participant list for round r, not the live one. This closes the draw->claim
+        // window: a leave() after the draw can no longer swap a different address into the position the
+        // sponsor privately chose, so the credit always lands on the member who held that index at draw.
+        address[] storage snap = _participantsAt[r];
+        uint256 n = snap.length;
         for (uint256 j = 0; j < n; j++) {
-            address p = participants[j];
+            address p = snap[j];
             ebool hit = FHE.eq(benIdx, FHE.asEuint64(uint64(j + 1))); // index+1 encoding; 0 = nobody
             euint64 credited = FHE.add(_sWon(p), FHE.select(hit, sponsorAmt, FHE.asEuint64(0)));
             _sponsoredWon[p] = credited;

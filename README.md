@@ -146,7 +146,7 @@ design note above. A chi-square goodness-of-fit test against the target law is o
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 24 passing
+npx hardhat test test/NdimbalPool.test.js     # 26 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -170,8 +170,12 @@ clear v1 rationale:
   slot. 32 is set **conservatively** for the current op count — it has **not yet been HCU-profiled**; a
   formal profile and a per-chain maximum are on the roadmap. *Residual risk:* a determined actor can still
   squat all 32 slots with dust deposits — a **stake-to-join** deterrent (hard to enforce on encrypted amounts)
-  is the real fix, on the roadmap. Note: `leave()` reindexes `participants[]` (swap-pop), which can invalidate
-  a pending "Tanti caché" index another saver set by position (best-effort, re-settable).
+  is the real fix, on the roadmap. Note: `leave()` reindexes `participants[]` (swap-pop). Because the draw
+  **freezes the participant list per round** (`_participantsAt[r]`), a `leave()` *after* a draw can no longer
+  **redirect** a "Tanti caché" credit to whoever got swapped into that slot — `claim()` pays out against the
+  frozen list. A `leave()` *before* the draw can still shift positions, so a sponsorship set by index may
+  then land on a different member (best-effort, re-settable until the draw). A per-address (not per-index)
+  encoding closes that pre-draw window too and is on the roadmap.
 - **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
   `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
   give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
@@ -186,8 +190,9 @@ clear v1 rationale:
 - **Give-back / sponsorship math is euint64 — and the prize is capped to keep it safe.** `c × pct / 100`
   stays in euint64 (widening it to euint128, as the ticket math is, pushes `claim()` past the fhEVM HCU
   budget). To make that *enforced* rather than merely assumed, `fundPrize` **clamps the pot** with `FHE.min`
-  to `MAX_PRIZE = 1.8×10¹⁷`, so `c × pct` can never overflow euint64. That ceiling is orders of magnitude
-  above any realistic cUSDT prize.
+  to `MAX_PRIZE = 1.8×10¹⁷`, so `c × pct` can never overflow euint64. Any amount funded above the ceiling is
+  **refunded to the funder** in the same call (`excess = newPot − capped`, transferred back) — never silently
+  absorbed by the contract. That ceiling is orders of magnitude above any realistic cUSDT prize.
 - **The winner is private cryptographically, but not against metadata.** Only the winner is incentivised to
   call the (expensive, O(n)) `claim()`, so an observer of the public transaction history can infer the winner
   with high confidence — the win *flag* itself stays encrypted; the leak is behavioural. (The `claimed`

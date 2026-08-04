@@ -18,18 +18,19 @@ async function main() {
   const tokenAddr = await token.getAddress();
   console.log("MockNdimbalToken:", tokenAddr);
 
-  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe).
+  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe), 32-participant cap.
   const DAY = 24 * 3600;
   const LOCK = 3600;
+  const MAX = 32;
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
-  const pool = await Pool.deploy(tokenAddr, DAY, LOCK);
+  const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   console.log("NdimbalPool     :", poolAddr);
 
   console.log("\nSave these addresses. Verify the source on Etherscan with:");
   console.log(`  npx hardhat verify --network sepolia ${tokenAddr}`);
-  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK}`);
+  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK} ${MAX}`);
 }
 
 main().catch((e) => {

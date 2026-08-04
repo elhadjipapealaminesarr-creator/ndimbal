@@ -124,6 +124,26 @@ describe("NdimbalPool", function () {
     expect(winners).to.equal(1); // carol; the two zero-balance savers can never tie-win
   });
 
+  // ---- ticket uniqueness (NDM-M-01): equal balances must still yield ONE winner ----
+  // The riskiest tie case: three savers with the SAME positive balance. balance × random can collide,
+  // so the ticket carries the public loop index in its low 8 bits to break exact ties. This asserts the
+  // uniqueness law directly — without it, two "argmax" savers could each claim the full pot.
+  it("produces exactly one winner even when all balances are equal (NDM-M-01)", async function () {
+    const [deployer, alice, bob, carol] = await ethers.getSigners();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool();
+    for (const w of [deployer, alice, bob, carol]) await mintAndApprove(token, tokenAddr, poolAddr, w, 1_000_000);
+    for (const w of [alice, bob, carol]) await deposit(pool, poolAddr, w, 500); // identical balances
+    await fundPrize(pool, poolAddr, deployer, 1000);
+    await advanceToDraw();
+    await pool.draw();
+
+    let winners = 0;
+    for (const who of [alice, bob, carol]) {
+      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
+    }
+    expect(winners).to.equal(1); // tie-breaker index guarantees a unique argmax
+  });
+
   // ---- audit fixes ----
   it("blocks a second claim() for the same round (NDM-M-03)", async function () {
     const { pool, poolAddr, alice } = await standard();
@@ -219,10 +239,32 @@ describe("NdimbalPool", function () {
     expect(bal).to.equal(200n); // 300 - 100
   });
 
-  it("reverts draw() when the pool has no participants", async function () {
+  it("advances an empty round instead of reverting (leave() deadlock fix)", async function () {
     const { pool } = await deployPool(); // nobody deposited
     await advanceToDraw();
-    await expect(pool.draw()).to.be.revertedWith("no participants");
+    await expect(pool.draw()).to.not.be.reverted; // empty round must NOT revert...
+    expect(await pool.round()).to.equal(1n);       // ...it advances the clock instead
+    expect(await pool.drawn(0)).to.equal(true);
+    expect(await pool.depositsOpen()).to.equal(true); // and deposits reopen for the next round
+  });
+
+  it("recovers after every saver leaves (no permanent lock)", async function () {
+    // alice/bob/carol join then all leave -> pool empty. draw() must still advance the round so the
+    // pool isn't frozen forever, and a new saver can join and win the next round.
+    const { pool, poolAddr, alice, bob, carol } = await standard();
+    await pool.connect(alice).leave();
+    await pool.connect(bob).leave();
+    await pool.connect(carol).leave();
+    expect(await pool.participantCount()).to.equal(0n);
+    await advanceToDraw();
+    await pool.draw(); // empty round 0 advances
+    expect(await pool.round()).to.equal(1n);
+    // round 1: alice rejoins and wins the rolled-over prize
+    await deposit(pool, poolAddr, alice, 50);
+    await advanceToDraw();
+    await pool.draw();
+    const won = await userBool(await pool.didWin(1, alice.address), poolAddr, alice);
+    expect(won).to.equal(true);
   });
 
   // ----------------------------------------------------- functional edges
