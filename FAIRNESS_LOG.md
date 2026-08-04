@@ -13,3 +13,4 @@ no balance, pool total or ticket is ever revealed.
 | Timestamp (UTC) | Rounds | Outcome | Result | Run |
 |---|---|---|---|---|
 | _first automated run will appear here_ | 200 | — | seeded on first schedule/dispatch | — |
+| 2026-08-04T14:02:25Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/30916755267) |
