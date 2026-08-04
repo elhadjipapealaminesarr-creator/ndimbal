@@ -37,7 +37,7 @@ describe("NDIMBAL — confidential draw fairness harness", function () {
     const tokenAddr = await token.getAddress();
 
     const P = await ethers.getContractFactory("NdimbalPool");
-    const pool = await P.deploy(tokenAddr, ROUND, LOCK);
+    const pool = await P.deploy(tokenAddr, ROUND, LOCK, 32); // maxParticipants (matches deployed config)
     await pool.waitForDeployment();
     const poolAddr = await pool.getAddress();
 

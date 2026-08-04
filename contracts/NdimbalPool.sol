@@ -238,13 +238,15 @@ contract NdimbalPool is ZamaEthereumConfig {
         euint64 amt = FHE.fromExternal(encAmount, inputProof);
         FHE.allowTransient(amt, address(token));
         euint64 got = token.confidentialTransferFrom(msg.sender, address(this), amt);
-        // Clamp the pot so the give-back math (c × pct) can never overflow euint64 in claim().
-        euint64 newPot = FHE.add(_prizePot, got);
-        euint64 capped = FHE.min(newPot, FHE.asEuint64(MAX_PRIZE));
-        // Any amount above the cap is REFUNDED to the funder — never silently absorbed by the contract.
-        // (Encrypted, so it leaks nothing: excess is 0 unless the cap was actually hit.)
-        euint64 excess = FHE.sub(newPot, capped);
-        _prizePot = capped;
+        // Clamp the INCOMING amount BEFORE adding, so the euint64 sum can never wrap. If we added first
+        // (`_prizePot + got`), a `got` near 2^64 would wrap the sum down to a small value — `FHE.min` would
+        // pass it through, `excess` would be 0, and the whole deposit would be silently absorbed with NO
+        // refund (exactly the case the refund is meant to cover). `_prizePot <= MAX_PRIZE` always holds by
+        // construction, so `headroom` never underflows and `_prizePot + accepted <= MAX_PRIZE` never overflows.
+        euint64 headroom = FHE.sub(FHE.asEuint64(MAX_PRIZE), _prizePot); // MAX_PRIZE - _prizePot (>= 0)
+        euint64 accepted = FHE.min(got, headroom);                       // the part that fits under the cap
+        euint64 excess = FHE.sub(got, accepted);                         // the rest is REFUNDED, never absorbed
+        _prizePot = FHE.add(_prizePot, accepted);
         FHE.allowThis(_prizePot);
         FHE.allowTransient(excess, address(token));
         token.confidentialTransfer(msg.sender, excess);

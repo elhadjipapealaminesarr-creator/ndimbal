@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NDIMBAL — confidential no-loss prize pool · live dApp (Sepolia)</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230E5A4A'/%3E%3Cellipse cx='32' cy='32' rx='13' ry='19' fill='%23E4A24C'/%3E%3Cpath d='M32 16 C25 24,25 40,32 48 C39 40,39 24,32 16Z' fill='%230A4638'/%3E%3C/svg%3E">
+<!-- ethers v6 + Zama relayer SDK (CDN, per Zama docs recommendation) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<script src="https://cdn.zama.ai/relayer-sdk-js/0.4.4/relayer-sdk-js.umd.cjs"></script>
+<style>
+  :root{
+    --bg:#FBF7F0;--card:#fff;--ink:#17233A;--muted:#6E7688;--line:#EEE4D6;
+    --green:#0E5A4A;--green-d:#0A4638;--soft:#E4EFEA;--gold:#E4A24C;--gold-d:#B87A28;--terra:#C75B39;--red:#b3402e;
+    --r:20px;--r-sm:13px;--shadow:0 14px 36px rgba(23,35,58,.10);--shadow-s:0 6px 18px rgba(23,35,58,.07);
+  }
+  *{box-sizing:border-box}body{margin:0;font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  .pattern{height:6px;background:repeating-linear-gradient(135deg,var(--green) 0 14px,var(--gold) 14px 20px,var(--terra) 20px 28px)}
+  .wrap{max-width:940px;margin:0 auto;padding:0 18px 60px}
+  nav{position:sticky;top:0;z-index:20;background:rgba(251,247,240,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:940px;margin:0 auto;padding:0 18px;height:62px;display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.05em;color:var(--green)}
+  .brand .b{color:var(--gold-d)} .brand svg{width:32px;height:32px}
+  .net{display:flex;align-items:center;gap:10px}
+  .chip{font-size:.78rem;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--soft);color:var(--green-d)}
+  .chip.warn{background:#fbe6df;color:var(--red)}
+  h1{font-size:1.7rem;margin:22px 0 2px} .lead{color:var(--muted);margin:0 0 8px}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+  @media(min-width:720px){.grid{grid-template-columns:1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-s);padding:18px}
+  .card.full{grid-column:1/-1}
+  .card h3{margin:0 0 4px;font-size:1.05rem}
+  .card p.hint{margin:0 0 12px;color:var(--muted);font-size:.86rem}
+  label{font-weight:600;font-size:.86rem;display:block;margin:10px 0 5px}
+  input[type=number]{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);font-size:1rem;font-family:inherit;background:#fff}
+  input[type=range]{width:100%;accent-color:var(--green)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;font-family:inherit;font-size:.95rem;cursor:pointer;border:1px solid transparent;border-radius:999px;padding:11px 18px;transition:transform .06s,background .15s}
+  .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn.p{background:var(--green);color:#fff}.btn.p:hover{background:var(--green-d)}
+  .btn.g{background:linear-gradient(180deg,#efb562,var(--gold));color:#3a2a10}
+  .btn.o{background:#fff;border-color:var(--line);color:var(--green-d)}
+  .btn.block{width:100%}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .val{font-family:ui-monospace,Menlo,monospace;font-weight:800;color:var(--green-d)}
+  .enc{font-family:ui-monospace,Menlo,monospace;color:var(--gold-d);font-size:.85rem}
+  .stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .stat:last-child{border-bottom:0}
+  .log{font-family:ui-monospace,Menlo,monospace;font-size:.8rem;background:#0d1b16;color:#bfe8d4;border-radius:var(--r-sm);padding:12px 14px;height:190px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+  .log a{color:#8fe3c0}
+  .banner{background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-top:10px;font-size:.9rem}
+  .muted{color:var(--muted)}.small{font-size:.85rem}
+  .pill{font-weight:800}
+  .foot{color:var(--muted);font-size:.82rem;margin-top:22px;text-align:center}
+  code{background:#f0e9dd;padding:1px 6px;border-radius:6px;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="pattern"></div>
+<nav><div class="nav-in">
+  <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#0E5A4A"/><ellipse cx="32" cy="32" rx="12" ry="18" fill="#E4A24C"/><path d="M32 16 C25 24,25 40,32 48 C39 40,39 24,32 16Z" fill="#0A4638"/></svg><span>NDIM<span class="b">BAL</span></span></div>
+  <div class="net">
+    <span class="chip" id="netChip">not connected</span>
+    <button class="btn p" id="connectBtn">Connect wallet</button>
+  </div>
+</div></nav>
+
+<div class="wrap">
+  <h1>Confidential no-loss prize pool — live on Sepolia</h1>
+  <p class="lead">A real dApp. Every value you enter is <b>encrypted in your browser</b> before it touches the chain, and only <b>you</b> can decrypt your own balance and result.</p>
+  <div class="banner small">
+    ⚙️ <b>First time?</b> 1) Connect MetaMask on <b>Sepolia</b> · 2) <b>Get test cUSDT</b> and approve the pool · 3) Deposit, set your dial, run a draw, decrypt your result. You need a little Sepolia ETH for gas.
+    <div class="muted" style="margin-top:6px">Pool <code id="poolAddr"></code> · token <code id="tokenAddr"></code></div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <h3>1 · Get test tokens</h3>
+      <p class="hint">Mint yourself a confidential cUSDT balance, then authorise the pool to move it (operator).</p>
+      <div class="row">
+        <button class="btn g" id="mintBtn" disabled>🪙 Mint 1,000,000 cUSDT</button>
+        <button class="btn o" id="opBtn" disabled>🔑 Approve pool</button>
+      </div>
+      <label>Your wallet cUSDT balance 🔒</label>
+      <div class="row" style="align-items:center">
+        <span class="val" id="walBal">—</span>
+        <button class="btn o small" id="walDec" disabled>Decrypt</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2 · Deposit &amp; withdraw</h3>
+      <p class="hint">No loss: your principal is withdrawable any time.</p>
+      <label>Amount (cUSDT)</label>
+      <input type="number" id="depAmt" min="0" value="1000">
+      <div class="row" style="margin-top:10px">
+        <button class="btn p" id="depBtn" disabled>Deposit</button>
+        <button class="btn o" id="wdrBtn" disabled>Withdraw</button>
+      </div>
+      <label>Your balance in the pool 🔒</label>
+      <div class="row" style="align-items:center">
+        <span class="val" id="poolBal">—</span>
+        <button class="btn o small" id="poolDec" disabled>Decrypt</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>3 · Your solidarity dial 🔒</h3>
+      <p class="hint">If you win, what % of your prize goes back to the community? Encrypted — nobody sees it but you.</p>
+      <label>Give-back: <b><span id="pctv">30</span>%</b></label>
+      <input type="range" id="pct" min="0" max="100" value="30">
+      <button class="btn p block" id="giveBtn" style="margin-top:10px" disabled>Set give-back (encrypted)</button>
+    </div>
+
+    <div class="card">
+      <h3>4 · Fund the prize</h3>
+      <p class="hint">A sponsor / yield source tops up the round prize — blindly.</p>
+      <label>Amount (cUSDT)</label>
+      <input type="number" id="fundAmt" min="0" value="500">
+      <button class="btn g block" id="fundBtn" style="margin-top:10px" disabled>💛 Fund the prize</button>
+    </div>
+
+    <div class="card full">
+      <h3>5 · The pool &amp; the draw</h3>
+      <div class="stat"><span>Current round</span><span class="pill" id="roundV">—</span></div>
+      <div class="stat"><span>Participants</span><span class="pill" id="pcountV">—</span></div>
+      <div class="stat"><span>Deposits open?</span><span class="pill" id="openV">—</span></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn g" id="drawBtn" disabled>🎲 Run the draw</button>
+        <button class="btn o" id="winBtn" disabled>Did I win? (decrypt)</button>
+        <button class="btn p" id="claimBtn" disabled>Claim prize</button>
+        <button class="btn o" id="refreshBtn" disabled>↻ Refresh</button>
+      </div>
+      <div class="banner" id="winBanner" style="display:none"></div>
+    </div>
+
+  </div>
+
+  <div class="card full" style="margin-top:14px">
+    <h3>Activity log</h3>
+    <div class="log" id="log">Waiting for wallet…</div>
+  </div>
+
+  <p class="foot">NDIMBAL · confidential no-loss prize savings · contract source-verified on Sepolia · built by El Hadji Pape Alamine Sarr</p>
+</div>
+
+<script>
+(function(){
+  const POOL  = "0x579Dc066A0E51bFe39cc507ebe55851729587f0c";
+  const TOKEN = "0x9dA75735C1C762FFf8F14cB63bA07De9a378318b";
+  const CHAIN_ID = 11155111n;
+  const SCAN = "https://sepolia.etherscan.io";
+
+  const TOKEN_ABI = [
+    "function mint(address to, bytes32 amount, bytes proof)",
+    "function setOperator(address operator, uint48 until)",
+    "function confidentialBalanceOf(address) view returns (bytes32)"
+  ];
+  const POOL_ABI = [
+    "function deposit(bytes32 encAmount, bytes proof)",
+    "function withdraw(bytes32 encAmount, bytes proof)",
+    "function setGiveBack(bytes32 encPct, bytes proof)",
+    "function setSponsorship(bytes32 idx, bytes32 pct, bytes proof)",
+    "function fundPrize(bytes32 encAmount, bytes proof)",
+    "function draw()",
+    "function claim(uint256 r)",
+    "function claimSponsored()",
+    "function confidentialBalanceOf(address) view returns (bytes32)",
+    "function didWin(uint256 r, address a) view returns (bytes32)",
+    "function sponsoredWonOf(address a) view returns (bytes32)",
+    "function participantCount() view returns (uint256)",
+    "function round() view returns (uint256)",
+    "function depositsOpen() view returns (bool)"
+  ];
+
+  const $=id=>document.getElementById(id);
+  const SDK = window.relayerSDK || window.RelayerSDK || window.ZamaRelayerSDK || window.fhevmSDK;
+  let provider, signer, account, instance, token, pool, ready=false;
+
+  function log(msg, cls){ const l=$("log"); const t=new Date().toLocaleTimeString(); l.innerHTML+=`\n[${t}] ${msg}`; l.scrollTop=l.scrollHeight; }
+  function tx(hash){ return `<a href="${SCAN}/tx/${hash}" target="_blank">${hash.slice(0,12)}…</a>`; }
+  function setBusy(b){ document.querySelectorAll('.btn').forEach(x=>{ if(x.id!=='connectBtn') x.disabled=b||!ready; }); }
+  function enableAll(){ ready=true; document.querySelectorAll('.card .btn').forEach(x=>x.disabled=false); }
+
+  $("poolAddr").textContent=POOL.slice(0,10)+"…";
+  $("tokenAddr").textContent=TOKEN.slice(0,10)+"…";
+  $("pct").addEventListener("input",e=>$("pctv").textContent=e.target.value);
+
+  // ---- connect ----
+  $("connectBtn").onclick=async()=>{
+    try{
+      if(!window.ethereum){ log("❌ MetaMask not found. Install it first."); return; }
+      if(!SDK){ log("❌ Relayer SDK failed to load from CDN (check your network / adblock)."); return; }
+      log("Connecting wallet…");
+      provider=new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts",[]);
+      const net=await provider.getNetwork();
+      if(net.chainId!==CHAIN_ID){
+        log("Wrong network — asking MetaMask to switch to Sepolia…");
+        try{ await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xaa36a7'}]}); }
+        catch(e){ log("⚠️ Please switch MetaMask to the Sepolia testnet, then reconnect."); return; }
+        provider=new ethers.BrowserProvider(window.ethereum);
+      }
+      signer=await provider.getSigner();
+      account=await signer.getAddress();
+      $("netChip").textContent=account.slice(0,6)+"…"+account.slice(-4)+" · Sepolia";
+      $("netChip").className="chip";
+      $("connectBtn").textContent="Connected";
+      log("✅ Wallet connected: "+account);
+
+      log("Loading the confidential engine (WASM)… this can take a few seconds.");
+      await SDK.initSDK();
+      // Use the SDK's built-in current Sepolia config (correct relayer + coprocessor addresses).
+      const config={ ...(SDK.SepoliaConfig||{}), network:window.ethereum };
+      if(!config.relayerUrl) config.relayerUrl="https://relayer.testnet.zama.cloud";
+      log("Relayer: "+config.relayerUrl+" · SDK "+(SDK.__version||"0.4.x"));
+      instance=await SDK.createInstance(config);
+      token=new ethers.Contract(TOKEN,TOKEN_ABI,signer);
+      pool=new ethers.Contract(POOL,POOL_ABI,signer);
+      log("✅ Confidential engine ready. You can use the dApp now.");
+      enableAll();
+      await refresh();
+    }catch(e){ log("❌ "+(e.shortMessage||e.message||e)); console.error(e); }
+  };
+
+  // ---- encryption helpers ----
+  async function encOne(contractAddr,value){
+    const buf=instance.createEncryptedInput(contractAddr,account);
+    buf.add64(BigInt(value));
+    const c=await buf.encrypt();
+    return { handle:ethers.hexlify(c.handles[0]), proof:ethers.hexlify(c.inputProof) };
+  }
+  async function userDec(contractAddr,handle){
+    if(!handle || /^0x0+$/.test(handle)){ return 0n; }
+    const kp=instance.generateKeypair();
+    const start=Math.floor(Date.now()/1000).toString();
+    const days="7";
+    const eip=instance.createEIP712(kp.publicKey,[contractAddr],start,days);
+    const sig=await signer.signTypedData(eip.domain,{UserDecryptRequestVerification:eip.types.UserDecryptRequestVerification},eip.message);
+    const res=await instance.userDecrypt([{handle,contractAddress:contractAddr}],kp.privateKey,kp.publicKey,sig.replace("0x",""),[contractAddr],account,start,days);
+    return res[handle];
+  }
+  async function send(promise,label){
+    setBusy(true);
+    try{ log("→ "+label+"…"); const t=await promise; log("  tx "+tx(t.hash)+" sent, waiting…"); const r=await t.wait(); log("  ✅ "+label+" confirmed (block "+r.blockNumber+")"); return r; }
+    catch(e){ log("  ❌ "+label+" failed: "+(e.shortMessage||e.reason||e.message||e)); throw e; }
+    finally{ setBusy(false); }
+  }
+
+  // ---- actions ----
+  $("mintBtn").onclick=async()=>{ try{ const e=await encOne(TOKEN,1000000); await send(token.mint(account,e.handle,e.proof),"Mint 1,000,000 cUSDT"); }catch(_){} };
+  $("opBtn").onclick=async()=>{ const until=Math.floor(Date.now()/1000)+365*24*3600; try{ await send(token.setOperator(POOL,until),"Approve pool as operator"); }catch(_){} };
+  $("depBtn").onclick=async()=>{ const v=+$("depAmt").value||0; if(v<=0)return; try{ const e=await encOne(POOL,v); await send(pool.deposit(e.handle,e.proof),"Deposit "+v+" cUSDT"); await refresh(); }catch(_){} };
+  $("wdrBtn").onclick=async()=>{ const v=+$("depAmt").value||0; if(v<=0)return; try{ const e=await encOne(POOL,v); await send(pool.withdraw(e.handle,e.proof),"Withdraw "+v+" cUSDT"); await refresh(); }catch(_){} };
+  $("giveBtn").onclick=async()=>{ const v=+$("pct").value||0; try{ const e=await encOne(POOL,v); await send(pool.setGiveBack(e.handle,e.proof),"Set give-back "+v+"%"); }catch(_){} };
+  $("fundBtn").onclick=async()=>{ const v=+$("fundAmt").value||0; if(v<=0)return; try{ const e=await encOne(POOL,v); await send(pool.fundPrize(e.handle,e.proof),"Fund prize "+v+" cUSDT"); }catch(_){} };
+  $("drawBtn").onclick=async()=>{ try{ await send(pool.draw(),"Run the draw"); await refresh(); }catch(_){} };
+  $("claimBtn").onclick=async()=>{ try{ const r=await pool.round(); const cur=r>0n?r-1n:0n; await send(pool.claim(cur),"Claim prize (round "+cur+")"); await refresh(); }catch(_){} };
+
+  $("walDec").onclick=async()=>{ try{ log("Decrypting your wallet balance…"); const h=await token.confidentialBalanceOf(account); const v=await userDec(TOKEN,h); $("walBal").textContent=v.toString()+" cUSDT"; log("  🔓 wallet balance = "+v.toString()); }catch(e){ log("  ❌ decrypt failed: "+(e.shortMessage||e.message)); } };
+  $("poolDec").onclick=async()=>{ try{ log("Decrypting your pool balance…"); const h=await pool.confidentialBalanceOf(account); const v=await userDec(POOL,h); $("poolBal").textContent=v.toString()+" cUSDT"; log("  🔓 pool balance = "+v.toString()); }catch(e){ log("  ❌ decrypt failed: "+(e.shortMessage||e.message)); } };
+  $("winBtn").onclick=async()=>{ try{ const r=await pool.round(); const cur=r>0n?r-1n:0n; log("Decrypting your result for round "+cur+"…"); const h=await pool.didWin(cur,account); const v=await userDec(POOL,h); const won=(v&&v.toString()!=="0"&&v!==false); $("winBanner").style.display="block"; $("winBanner").innerHTML=won?"🎉 <b>You won round "+cur+"!</b> Click <b>Claim prize</b> to receive it (your private give-back is applied automatically).":"🤞 Not this round — but your principal is intact. Fund + draw again!"; log("  🔓 didWin(round "+cur+") = "+won); }catch(e){ log("  ❌ decrypt failed: "+(e.shortMessage||e.message)); } };
+
+  $("refreshBtn").onclick=refresh;
+  async function refresh(){
+    try{
+      const [r,pc,open]=await Promise.all([pool.round(),pool.participantCount(),pool.depositsOpen()]);
+      $("roundV").textContent="#"+r.toString();
+      $("pcountV").textContent=pc.toString();
+      $("openV").textContent=open?"yes ✅":"locked 🔒";
+    }catch(e){ log("refresh failed: "+(e.shortMessage||e.message)); }
+  }
+})();
+</script>
+</body>
+</html>

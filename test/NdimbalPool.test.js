@@ -188,6 +188,29 @@ describe("NdimbalPool", function () {
     expect(await pool.isParticipant(alice.address)).to.equal(false);
   });
 
+  it("stays overflow-safe: a giant fund on a pot at the cap is refunded, not wrapped (fundPrize)", async function () {
+    // Reviewer's overflow case: with the pot already at MAX_PRIZE, a second fund large enough that
+    // `_prizePot + got` would wrap euint64 must be FULLY refunded (clamp the incoming amount before adding),
+    // never silently absorbed. bob funds a value that would wrap a naive add; every token must come back.
+    const [deployer, alice, bob] = await ethers.getSigners();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool();
+    const MAX_PRIZE = 180_000_000_000_000_000n;       // 1.8e17 (contract constant)
+    const BIG = 18_300_000_000_000_000_000n;          // 1.83e19: MAX_PRIZE + BIG overflows euint64
+    await mintAndApprove(token, tokenAddr, poolAddr, deployer, MAX_PRIZE);
+    await mintAndApprove(token, tokenAddr, poolAddr, bob, BIG);
+    await mintAndApprove(token, tokenAddr, poolAddr, alice, 1_000_000);
+    await deposit(pool, poolAddr, alice, 100);        // sole depositor -> deterministic winner
+    await fundPrize(pool, poolAddr, deployer, MAX_PRIZE); // pot now sits AT the cap
+    const f = await enc(poolAddr, bob, BIG);
+    await pool.connect(bob).fundPrize(f.handle, f.proof); // would wrap under a naive add -> must refund all
+    const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
+    expect(bobBal).to.equal(BIG);                     // every token bob sent came straight back
+    await advanceToDraw();
+    await pool.draw();
+    const claimable = await userU64(await pool.claimableOf(0, alice.address), poolAddr, alice);
+    expect(claimable).to.equal(MAX_PRIZE);            // pot held at the cap, never wrapped down
+  });
+
   it("no-loss: a saver can withdraw principal at any time", async function () {
     const { pool, poolAddr, alice } = await standard();
     await withdraw(pool, poolAddr, alice, 40);

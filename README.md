@@ -146,7 +146,7 @@ design note above. A chi-square goodness-of-fit test against the target law is o
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 26 passing
+npx hardhat test test/NdimbalPool.test.js     # 27 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -176,6 +176,13 @@ clear v1 rationale:
   frozen list. A `leave()` *before* the draw can still shift positions, so a sponsorship set by index may
   then land on a different member (best-effort, re-settable until the draw). A per-address (not per-index)
   encoding closes that pre-draw window too and is on the roadmap.
+- **The draw snapshots the participant list (NDM-L-05, storage cost).** Freezing `participants` into
+  `_participantsAt[r]` at each draw copies up to `MAX_PARTICIPANTS` addresses to storage (~640k gas at 32),
+  and the per-round snapshots are never purged, so contract storage grows one array per round. This is the
+  price of closing the draw→claim sponsorship-redirect window. The roadmap fix stores only a
+  `keccak256(participants)` per round (one slot) and has `claim(r, address[] calldata snapshot)` verify the
+  hash — O(1) storage and calldata iteration — but it changes the `claim` signature, so it is deferred to a
+  post-hackathon version rather than shipped the night before submission.
 - **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
   `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
   give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
