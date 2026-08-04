@@ -97,11 +97,22 @@ step *beyond* the brief's "verifiable" requirement: the selection circuit and th
 draw is deterministic and that **exactly one winner** is produced per round. What stays private is only
 *who* that winner is — each saver decrypts their own flag, nobody else's. Verifiable process, private outcome.
 
-**Design note (honest):** the argmax draw makes odds *strictly increase* with the deposit while
-keeping the total secret. An *exactly-proportional* draw (`P = balance / total`) requires revealing
-the aggregate total on-chain, which needs an on-chain decryption oracle not yet in
-`@fhevm/solidity` 0.11.1. When that lands, NDIMBAL can offer an "exact-proportional" mode (reveal
-total only). We chose maximum privacy for v1.
+**Design note (honest) — the draw is weighted, not exactly proportional.** The argmax of
+`balance × random` makes odds rise with the deposit, but **not linearly**. For two savers with balances
+`b₁ ≤ b₂`, the exact law is **P(b₁ wins) = (b₁ / b₂) / 2**, which under-weights small savers relative to a
+proportional draw. Measured over 400,000 simulated draws per configuration:
+
+| Pool | Balance | Proportional share | Actual odds | Ratio |
+|---|---|---|---|---|
+| 100 / 300 / 600 | 100 | 10.0% | 1.9% | 0.19× |
+| 100 / 300 / 600 | 300 | 30.0% | 24.2% | 0.80× |
+| 100 / 300 / 600 | 600 | 60.0% | 74.0% | 1.23× |
+
+We surface this openly rather than claim proportionality. **Why not exactly-proportional?** A
+`P = balance / total` draw needs the aggregate **total** revealed on-chain (an on-chain decryption oracle
+not yet in `@fhevm/solidity` 0.11.1). We chose **maximum privacy** for v1 — even the pool total never leaks —
+and document the resulting weighting. An exact-proportional mode (cumulative-threshold circuit, or a
+total-reveal oracle when available) is on the roadmap.
 
 ## Verify the fairness yourself
 
@@ -118,6 +129,10 @@ which appends each result to [`FAIRNESS_LOG.md`](./FAIRNESS_LOG.md) and drives t
 It runs **only on simulated accounts** — it never reads or publishes any real depositor's balance,
 ticket, or the real pool total.
 
+**Scope of the harness (honest):** it verifies *exactly-one-winner* and *odds rise with the deposit* — it does
+**not** test the *shape* of the distribution, so on its own it cannot detect the weighting quantified in the
+design note above. A chi-square goodness-of-fit test against the target law is on the roadmap.
+
 ## Contracts (`contracts/`)
 
 | File | Role |
@@ -131,7 +146,7 @@ ticket, or the real pool total.
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 20 passing
+npx hardhat test test/NdimbalPool.test.js     # 22 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -140,7 +155,7 @@ npx hardhat run scripts/deploy.js --network sepolia
 The deploy script prints the two `npx hardhat verify` commands for Etherscan source verification.
 
 **Security posture:** `nonReentrant` on all token-touching functions, anti-snipe deposit lock
-(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), and a **zero-balance guard** so an emptied account can never win. Ticket math uses
+(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** (`MAX_PARTICIPANTS`) against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize rollover** so a no-winner round never burns the pot, and a **double-claim lock**. The last four harden findings from an **independent security review** — every high/medium item affecting funds or availability is fixed with regression tests; the remaining trade-offs are documented honestly above. Ticket math uses
 `euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
 
 ## Known limits (documented on purpose)
@@ -167,6 +182,13 @@ clear v1 rationale:
   participant simply routes nothing (the amount returns to the winner via the encrypted maths).
   Validating it on-chain would require revealing the chosen index, which would defeat the sponsorship's
   privacy — so this trade-off is intentional.
+- **Give-back / sponsorship math is euint64.** `c × pct / 100` is kept in euint64: widening it to euint128
+  (as the ticket math is) pushes `claim()` past the fhEVM HCU / circuit-depth budget for one transaction.
+  euint64 is safe for prize amounts up to ~1.8×10¹⁷ — orders of magnitude above any realistic cUSDT prize.
+- **The winner is private cryptographically, but not against metadata.** Only the winner is incentivised to
+  call the (expensive, O(n)) `claim()`, so an observer of the public transaction history can infer the winner
+  with high confidence. The win *flag* stays encrypted — the leak is behavioural. Crediting the prize at draw
+  time to a claimable balance (as "Tanti caché" already does), making claims indistinguishable, is on the roadmap.
 
 ## Deployed (Sepolia)
 

@@ -124,6 +124,31 @@ describe("NdimbalPool", function () {
     expect(winners).to.equal(1); // carol; the two zero-balance savers can never tie-win
   });
 
+  // ---- audit fixes ----
+  it("blocks a second claim() for the same round (NDM-M-03)", async function () {
+    const { pool, poolAddr, alice } = await standard();
+    await advanceToDraw();
+    await pool.draw();
+    await pool.connect(alice).claim(0);                       // first claim ok (moves 0 if she lost)
+    await expect(pool.connect(alice).claim(0)).to.be.revertedWith("already claimed");
+  });
+
+  it("rolls the prize over to the next round when nobody wins (NDM-H-02)", async function () {
+    const { pool, poolAddr, alice, bob, carol } = await standard(); // prize = 1000
+    // round 0: everyone withdraws -> all balances zero -> nobody wins -> prize must roll over (not burn)
+    await withdraw(pool, poolAddr, alice, 100);
+    await withdraw(pool, poolAddr, bob, 300);
+    await withdraw(pool, poolAddr, carol, 600);
+    await advanceToDraw();
+    await pool.draw();
+    // round 1: only alice deposits -> sole positive balance -> she wins the rolled-over prize
+    await deposit(pool, poolAddr, alice, 50);
+    await advanceToDraw();
+    await pool.draw();
+    const claimable = await userU64(await pool.claimableOf(1, alice.address), poolAddr, alice);
+    expect(claimable).to.equal(1000n); // the 1000 prize survived round 0 and is claimable in round 1
+  });
+
   it("no-loss: a saver can withdraw principal at any time", async function () {
     const { pool, poolAddr, alice } = await standard();
     await withdraw(pool, poolAddr, alice, 40);

@@ -40,6 +40,9 @@ contract NdimbalPool is ZamaEthereumConfig {
     mapping(address => euint64) private _giveBackPct; // encrypted solidarity dial, 0..100 (default 0)
     mapping(address => bool) public isParticipant;
     address[] public participants;
+    // Hard cap on active participants. draw()/claim() are O(n) in FHE ops, so an unbounded list could be
+    // inflated by a third party until a draw exceeds the fhEVM per-tx budget (permanent DoS). This bounds it.
+    uint256 public constant MAX_PARTICIPANTS = 64;
 
     // --- "Tanti caché" — anonymous sponsorship (a saver privately routes part of a win to a member) ---
     mapping(address => euint64) private _sponsorIdx;    // encrypted (participant index + 1); 0 = nobody
@@ -52,6 +55,7 @@ contract NdimbalPool is ZamaEthereumConfig {
     mapping(uint256 => bool) public drawn;                        // one draw per round
     mapping(uint256 => mapping(address => ebool)) private _won;   // round => saver => encrypted win flag
     mapping(uint256 => mapping(address => euint64)) private _claimable;
+    mapping(uint256 => mapping(address => bool)) public claimed;  // one claim per saver per round (no re-run)
 
     // Snapshots taken AT DRAW time so a winner can't reduce their pledged generosity after the fact
     // (anti front-running): the give-back % and the sponsorship (index + %) are frozen per round.
@@ -119,6 +123,7 @@ contract NdimbalPool is ZamaEthereumConfig {
 
     function _register(address a) internal {
         if (!isParticipant[a]) {
+            require(participants.length < MAX_PARTICIPANTS, "pool full");
             isParticipant[a] = true;
             participants.push(a);
         }
@@ -220,12 +225,18 @@ contract NdimbalPool is ZamaEthereumConfig {
         // pass 1: weighted encrypted tickets + running encrypted max
         for (uint256 i = 0; i < n; i++) {
             euint32 rnd = FHE.randEuint32();                                            // protocol randomness
-            euint128 t = FHE.mul(FHE.asEuint128(_bal(participants[i])), FHE.asEuint128(rnd)); // ticket = balance × random
+            // Strictly-unique ticket: (balance × random) shifted up 8 bits, with the public loop index in the
+            // low bits. Two non-zero tickets can then NEVER be exactly equal — which would otherwise make two
+            // savers "win" the same round and let each claim the full pot (breaking the no-loss guarantee).
+            // (balance 2^64 × rand 2^32 ≈ 2^96, << 8 ≈ 2^104, + index < 2^8 — well within euint128.)
+            euint128 t = FHE.mul(FHE.asEuint128(_bal(participants[i])), FHE.asEuint128(rnd)); // balance × random
+            t = FHE.add(FHE.mul(t, FHE.asEuint128(256)), FHE.asEuint128(uint128(n - i)));     // (t << 8) | (n - i)
             tickets[i] = t;
             maxTicket = FHE.max(maxTicket, t);
         }
 
         // pass 2: encrypted win flag + claimable prize (full pot to the winner)
+        ebool anyWon = FHE.asEbool(false); // encrypted "did anyone win this round?"
         for (uint256 i = 0; i < n; i++) {
             address p = participants[i];
             // Guard: a saver with a zero balance (deposited then withdrew everything, but still
@@ -237,6 +248,7 @@ contract NdimbalPool is ZamaEthereumConfig {
                 FHE.eq(tickets[i], maxTicket),
                 FHE.gt(_bal(p), FHE.asEuint64(0))
             );
+            anyWon = FHE.or(anyWon, won);
             euint64 c = FHE.select(won, _prizePot, FHE.asEuint64(0));
             _won[r][p] = won;
             _claimable[r][p] = c;
@@ -259,7 +271,9 @@ contract NdimbalPool is ZamaEthereumConfig {
 
         round = r + 1;
         roundStart = uint64(block.timestamp);
-        _prizePot = FHE.asEuint64(0); // reset for next round
+        // Roll the prize over: only zero the pot if someone actually won; otherwise it carries to next round
+        // (matches the documented behaviour — a no-winner round must not burn the funded prize).
+        _prizePot = FHE.select(anyWon, FHE.asEuint64(0), _prizePot);
         FHE.allowThis(_prizePot);
         emit DrawExecuted(r, n);
     }
@@ -269,12 +283,19 @@ contract NdimbalPool is ZamaEthereumConfig {
     ///         further share to a member you chose in secret; the rest is yours — all on encrypted
     ///         values, so nobody sees your generosity or who you supported.
     function claim(uint256 r) external nonReentrant {
+        // A trivially-encrypted 0 still passes FHE.isInitialized, so zeroing _claimable is NOT enough to
+        // block a re-call (which would re-run the O(n) sponsorship loop). This plaintext flag is the real lock.
+        require(!claimed[r][msg.sender], "already claimed");
         euint64 c = _claimable[r][msg.sender];
         require(FHE.isInitialized(c), "nothing to claim");
+        claimed[r][msg.sender] = true;
 
         // Generosity choices are read from the round SNAPSHOT (frozen at draw), not the live values,
         // so a winner cannot lower their give-back or sponsorship after learning they won.
-        // 1) community give-back
+        // 1) community give-back. Kept in euint64 on purpose: widening this path to euint128 pushes claim()
+        //    past the fhEVM HCU / circuit-depth budget for one transaction (the O(n) sponsorship loop already
+        //    dominates the cost). euint64 is safe for prize amounts up to ~1.8e17 — orders of magnitude above
+        //    any realistic cUSDT prize. This bound is documented as a known limit in the README.
         euint64 community = FHE.div(FHE.mul(c, _giveBackAt[r][msg.sender]), uint64(100)); // c × pct / 100
         euint64 net = FHE.sub(c, community);
 
