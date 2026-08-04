@@ -194,8 +194,8 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (live · patched · source-verified) | [`0xFc62d3AB09d7331D0029AA8BB80e219b03Dc4564`](https://sepolia.etherscan.io/address/0xFc62d3AB09d7331D0029AA8BB80e219b03Dc4564#code) | Powers the hosted dApp · includes the **zero-balance guard** · 10-min rounds for a fully playable draw |
-| Confidential token (demo cUSDT) | [`0xc84442f46F90C5836D586f7FFaafB5673862Bf83`](https://sepolia.etherscan.io/address/0xc84442f46F90C5836D586f7FFaafB5673862Bf83) | ERC-7984 stand-in for the pool above |
+| **NdimbalPool** (live · audit-hardened · source-verified) | [`0xF99a659f0155b0697B3B7ab5515e56bc6c23BB32`](https://sepolia.etherscan.io/address/0xF99a659f0155b0697B3B7ab5515e56bc6c23BB32#code) | Powers the hosted dApp · includes the audit fixes (cap, unique tickets, prize rollover, double-claim lock, zero-balance guard) · 10-min rounds for a fully playable draw |
+| Confidential token (demo cUSDT) | [`0xb2E1052f2e42479fE18351F501FBd78A1E33FA22`](https://sepolia.etherscan.io/address/0xb2E1052f2e42479fE18351F501FBd78A1E33FA22) | ERC-7984 stand-in for the pool above |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
