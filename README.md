@@ -169,10 +169,8 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (production-config) | [`0x579Dc066A0E51bFe39cc507ebe55851729587f0c`](https://sepolia.etherscan.io/address/0x579Dc066A0E51bFe39cc507ebe55851729587f0c) | 1-day rounds, **source-verified** on Etherscan |
-| Confidential token (demo cUSDT) | [`0x9dA75735C1C762FFf8F14cB63bA07De9a378318b`](https://sepolia.etherscan.io/address/0x9dA75735C1C762FFf8F14cB63bA07De9a378318b) | for the production-config pool |
-| **NdimbalPool** (live-demo instance) | [`0xb1dCe02970147Da2aD75af23B52A62B820b65E0B`](https://sepolia.etherscan.io/address/0xb1dCe02970147Da2aD75af23B52A62B820b65E0B) | 10-min rounds, powers the hosted dApp so anyone can play a full draw |
-| Confidential token (live-demo) | [`0x31657AA0C4f1fFF049818FA4Da00339c580f6C33`](https://sepolia.etherscan.io/address/0x31657AA0C4f1fFF049818FA4Da00339c580f6C33) | for the live-demo pool |
+| **NdimbalPool** (live · patched · source-verified) | [`0xFc62d3AB09d7331D0029AA8BB80e219b03Dc4564`](https://sepolia.etherscan.io/address/0xFc62d3AB09d7331D0029AA8BB80e219b03Dc4564#code) | Powers the hosted dApp · includes the **zero-balance guard** · 10-min rounds for a fully playable draw |
+| Confidential token (demo cUSDT) | [`0xc84442f46F90C5836D586f7FFaafB5673862Bf83`](https://sepolia.etherscan.io/address/0xc84442f46F90C5836D586f7FFaafB5673862Bf83) | ERC-7984 stand-in for the pool above |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
