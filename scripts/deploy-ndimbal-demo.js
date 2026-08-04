@@ -1,0 +1,36 @@
+// Deploy a SHORT-ROUND demo instance of NDIMBAL to Sepolia, so anyone (the jury) can play a full
+// round — deposit, wait a couple of minutes, draw, decrypt the win — without waiting a full day.
+//
+//   npx hardhat run scripts/deploy-ndimbal-demo.js --network sepolia
+//
+// The canonical 1-day-round contract stays the "production-config" reference; this instance is
+// purely to make the live dApp fully playable during evaluation.
+const hre = require("hardhat");
+
+async function main() {
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("Deployer:", deployer.address);
+  const bal = await hre.ethers.provider.getBalance(deployer.address);
+  console.log("Balance :", hre.ethers.formatEther(bal), "ETH\n");
+
+  const Token = await hre.ethers.getContractFactory("MockNdimbalToken");
+  const token = await Token.deploy();
+  await token.waitForDeployment();
+  const tokenAddr = await token.getAddress();
+  console.log("MockNdimbalToken:", tokenAddr);
+
+  const ROUND = 600; // 10-min rounds — 8-min deposit window, no timing stress for a live demo
+  const LOCK = 120;  // deposits lock 2 min before the draw
+  const MAX = 32;    // max active participants (anti-DoS cap)
+  const Pool = await hre.ethers.getContractFactory("NdimbalPool");
+  const pool = await Pool.deploy(tokenAddr, ROUND, LOCK, MAX);
+  await pool.waitForDeployment();
+  const poolAddr = await pool.getAddress();
+  console.log("NdimbalPool     :", poolAddr, `(round=${ROUND}s, lock=${LOCK}s, max=${MAX})`);
+
+  console.log("\nPoint app.html at these addresses. Verify the source on Etherscan with:");
+  console.log(`  npx hardhat verify --network sepolia ${tokenAddr}`);
+  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${ROUND} ${LOCK} ${MAX}`);
+}
+
+main().catch((e) => { console.error(e); process.exitCode = 1; });

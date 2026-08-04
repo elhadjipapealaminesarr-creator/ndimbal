@@ -146,7 +146,7 @@ design note above. A chi-square goodness-of-fit test against the target law is o
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 22 passing
+npx hardhat test test/NdimbalPool.test.js     # 24 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -155,7 +155,7 @@ npx hardhat run scripts/deploy.js --network sepolia
 The deploy script prints the two `npx hardhat verify` commands for Etherscan source verification.
 
 **Security posture:** `nonReentrant` on all token-touching functions, anti-snipe deposit lock
-(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** (`MAX_PARTICIPANTS`) against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize rollover** so a no-winner round never burns the pot, and a **double-claim lock**. The last four harden findings from an **independent security review** — every high/medium item affecting funds or availability is fixed with regression tests; the remaining trade-offs are documented honestly above. Ticket math uses
+(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** plus a voluntary **`leave()`** purge against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize cap + rollover** (no overflow, and a no-winner round never burns the pot), a **double-claim lock**, and a **`private`** `claimed` flag. These harden findings from an **independent security review**: every item affecting **saver principal or draw availability** is fixed with regression tests. The remaining review items are **deliberate v1 trade-offs, documented honestly below** — chiefly the single-key community fund (`sweepCommunityFund`) and the winner's metadata-level (not cryptographic) linkability. Ticket math uses
 `euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
 
 ## Known limits (documented on purpose)
@@ -163,14 +163,15 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 Rather than let a reviewer find these, here they are up front — none is a security hole, each has a
 clear v1 rationale:
 
-- **Participant count is bounded by the fhEVM per-transaction budget.** `draw()` is O(n) in FHE ops
-  with a sequential `FHE.max` chain, and `claim()` also loops over all participants (to hide the
-  "Tanti caché" beneficiary). Beyond a certain `n`, a single `draw()`/`claim()` would exceed the
-  fhEVM **HCU (Homomorphic Complexity Units) / circuit-depth budget** allowed in one transaction — and
-  since inactive addresses are never purged, that cost only grows over time. **Recommended active-
-  participant cap: ~40–50 per round** on the current `@fhevm/solidity` 0.11.1 op budget; measure on
-  your target chain before scaling past that. A `MAX_PARTICIPANTS` require (hard cap) and a "leave on
-  full withdrawal" purge are on the roadmap.
+- **Participant count is capped (shipped) at `MAX_PARTICIPANTS`, set to 32 at deploy.** `draw()`/`claim()`
+  are O(n) in FHE ops, so an unbounded list could be inflated until a transaction exceeds the fhEVM
+  **HCU (Homomorphic Complexity Units) / circuit-depth budget**. The cap (an immutable constructor
+  parameter) bounds this, and savers can call **`leave()`** to withdraw their whole balance and free their
+  slot. 32 is set **conservatively** for the current op count — it has **not yet been HCU-profiled**; a
+  formal profile and a per-chain maximum are on the roadmap. *Residual risk:* a determined actor can still
+  squat all 32 slots with dust deposits — a **stake-to-join** deterrent (hard to enforce on encrypted amounts)
+  is the real fix, on the roadmap. Note: `leave()` reindexes `participants[]` (swap-pop), which can invalidate
+  a pending "Tanti caché" index another saver set by position (best-effort, re-settable).
 - **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
   `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
   give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
@@ -182,13 +183,16 @@ clear v1 rationale:
   participant simply routes nothing (the amount returns to the winner via the encrypted maths).
   Validating it on-chain would require revealing the chosen index, which would defeat the sponsorship's
   privacy — so this trade-off is intentional.
-- **Give-back / sponsorship math is euint64.** `c × pct / 100` is kept in euint64: widening it to euint128
-  (as the ticket math is) pushes `claim()` past the fhEVM HCU / circuit-depth budget for one transaction.
-  euint64 is safe for prize amounts up to ~1.8×10¹⁷ — orders of magnitude above any realistic cUSDT prize.
+- **Give-back / sponsorship math is euint64 — and the prize is capped to keep it safe.** `c × pct / 100`
+  stays in euint64 (widening it to euint128, as the ticket math is, pushes `claim()` past the fhEVM HCU
+  budget). To make that *enforced* rather than merely assumed, `fundPrize` **clamps the pot** with `FHE.min`
+  to `MAX_PRIZE = 1.8×10¹⁷`, so `c × pct` can never overflow euint64. That ceiling is orders of magnitude
+  above any realistic cUSDT prize.
 - **The winner is private cryptographically, but not against metadata.** Only the winner is incentivised to
   call the (expensive, O(n)) `claim()`, so an observer of the public transaction history can infer the winner
-  with high confidence. The win *flag* stays encrypted — the leak is behavioural. Crediting the prize at draw
-  time to a claimable balance (as "Tanti caché" already does), making claims indistinguishable, is on the roadmap.
+  with high confidence — the win *flag* itself stays encrypted; the leak is behavioural. (The `claimed`
+  bookkeeping is `private`, so it adds no extra on-chain "who claimed" signal.) Crediting the prize at draw
+  time to a claimable balance — making claims indistinguishable between winners and losers — is on the roadmap.
 
 ## Deployed (Sepolia)
 

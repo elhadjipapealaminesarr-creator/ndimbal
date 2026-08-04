@@ -40,9 +40,13 @@ contract NdimbalPool is ZamaEthereumConfig {
     mapping(address => euint64) private _giveBackPct; // encrypted solidarity dial, 0..100 (default 0)
     mapping(address => bool) public isParticipant;
     address[] public participants;
-    // Hard cap on active participants. draw()/claim() are O(n) in FHE ops, so an unbounded list could be
-    // inflated by a third party until a draw exceeds the fhEVM per-tx budget (permanent DoS). This bounds it.
-    uint256 public constant MAX_PARTICIPANTS = 64;
+    mapping(address => uint256) private participantIndex; // position in participants[], for O(1) removal on leave()
+    // Hard cap on active participants (set at deploy). draw()/claim() are O(n) in FHE ops, so an unbounded list
+    // could be inflated by a third party until a draw exceeds the fhEVM per-tx budget. Set conservatively for the
+    // op count; savers can leave() to free a slot. (A stake-to-join defence against slot-squatting is on the roadmap.)
+    uint256 public immutable MAX_PARTICIPANTS;
+    // Prize is clamped so the give-back math (c × pct) can never overflow euint64. 1.8e17 is far above any real prize.
+    uint64 public constant MAX_PRIZE = 180_000_000_000_000_000;
 
     // --- "Tanti caché" — anonymous sponsorship (a saver privately routes part of a win to a member) ---
     mapping(address => euint64) private _sponsorIdx;    // encrypted (participant index + 1); 0 = nobody
@@ -55,7 +59,7 @@ contract NdimbalPool is ZamaEthereumConfig {
     mapping(uint256 => bool) public drawn;                        // one draw per round
     mapping(uint256 => mapping(address => ebool)) private _won;   // round => saver => encrypted win flag
     mapping(uint256 => mapping(address => euint64)) private _claimable;
-    mapping(uint256 => mapping(address => bool)) public claimed;  // one claim per saver per round (no re-run)
+    mapping(uint256 => mapping(address => bool)) private claimed; // one claim per saver per round; private so it leaks no "who claimed" metadata
 
     // Snapshots taken AT DRAW time so a winner can't reduce their pledged generosity after the fact
     // (anti front-running): the give-back % and the sponsorship (index + %) are frozen per round.
@@ -82,12 +86,14 @@ contract NdimbalPool is ZamaEthereumConfig {
     event SponsorshipSet(address indexed sponsor);
     event SponsoredClaimed(address indexed beneficiary);
 
-    constructor(INdimbalToken _token, uint64 _roundDuration, uint64 _lockWindow) {
+    constructor(INdimbalToken _token, uint64 _roundDuration, uint64 _lockWindow, uint256 _maxParticipants) {
         require(_lockWindow < _roundDuration, "lock >= duration");
+        require(_maxParticipants > 0, "max=0");
         token = _token;
         admin = msg.sender;
         roundDuration = _roundDuration;
         lockWindow = _lockWindow;
+        MAX_PARTICIPANTS = _maxParticipants;
         roundStart = uint64(block.timestamp);
         _prizePot = FHE.asEuint64(0);
         _communityFund = FHE.asEuint64(0);
@@ -125,6 +131,7 @@ contract NdimbalPool is ZamaEthereumConfig {
         if (!isParticipant[a]) {
             require(participants.length < MAX_PARTICIPANTS, "pool full");
             isParticipant[a] = true;
+            participantIndex[a] = participants.length;
             participants.push(a);
         }
     }
@@ -192,6 +199,34 @@ contract NdimbalPool is ZamaEthereumConfig {
         emit Withdrawn(msg.sender);
     }
 
+    /// @notice Withdraw your ENTIRE balance and leave the pool, freeing your participant slot. FHE can't
+    ///         observe an encrypted-zero balance, so purging is voluntary — this is the explicit exit path
+    ///         (it keeps draw()/claim() cheap and lets honest churn free capped slots).
+    /// @dev    Removal reindexes participants[] (swap-pop), which can invalidate a pending "Tanti caché"
+    ///         index another saver set by position; sponsorship-by-index is best-effort and re-settable.
+    function leave() external nonReentrant {
+        require(isParticipant[msg.sender], "not in pool");
+        euint64 bal = _bal(msg.sender);
+        // effects first (CEI): zero the balance, then swap-pop out of participants[]
+        _balance[msg.sender] = FHE.asEuint64(0);
+        FHE.allowThis(_balance[msg.sender]);
+        FHE.allow(_balance[msg.sender], msg.sender);
+        uint256 idx = participantIndex[msg.sender];
+        uint256 last = participants.length - 1;
+        if (idx != last) {
+            address moved = participants[last];
+            participants[idx] = moved;
+            participantIndex[moved] = idx;
+        }
+        participants.pop();
+        delete participantIndex[msg.sender];
+        isParticipant[msg.sender] = false;
+        // interaction last
+        FHE.allowTransient(bal, address(token));
+        token.confidentialTransfer(msg.sender, bal);
+        emit Withdrawn(msg.sender);
+    }
+
     // ------------------------------------------------------------------ prize (yield source)
     /// @notice Fund the current round's prize with a confidential amount (yield source or sponsor).
     ///         A sponsor can fund the pool without ever seeing a balance or the winner.
@@ -199,7 +234,8 @@ contract NdimbalPool is ZamaEthereumConfig {
         euint64 amt = FHE.fromExternal(encAmount, inputProof);
         FHE.allowTransient(amt, address(token));
         euint64 got = token.confidentialTransferFrom(msg.sender, address(this), amt);
-        _prizePot = FHE.add(_prizePot, got);
+        // Clamp the pot so the give-back math (c × pct) can never overflow euint64 in claim().
+        _prizePot = FHE.min(FHE.add(_prizePot, got), FHE.asEuint64(MAX_PRIZE));
         FHE.allowThis(_prizePot);
         emit PrizeFunded(msg.sender);
     }

@@ -50,11 +50,11 @@ async function advanceToDraw() {
   await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
   await ethers.provider.send("evm_mine", []);
 }
-async function deployPool() {
+async function deployPool(maxParticipants = 32) {
   const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();
-  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK);
+  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, maxParticipants);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   return { token, tokenAddr, pool, poolAddr };
@@ -147,6 +147,25 @@ describe("NdimbalPool", function () {
     await pool.draw();
     const claimable = await userU64(await pool.claimableOf(1, alice.address), poolAddr, alice);
     expect(claimable).to.equal(1000n); // the 1000 prize survived round 0 and is claimable in round 1
+  });
+
+  it("caps the participant count so the list can't be inflated (NDM-H-01)", async function () {
+    const [deployer, alice, bob, carol] = await ethers.getSigners();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool(3); // tiny cap for the test
+    for (const w of [alice, bob, carol, deployer]) await mintAndApprove(token, tokenAddr, poolAddr, w, 1_000_000);
+    await deposit(pool, poolAddr, alice, 10);
+    await deposit(pool, poolAddr, bob, 10);
+    await deposit(pool, poolAddr, carol, 10); // 3 participants — cap reached
+    const d = await enc(poolAddr, deployer, 10);
+    await expect(pool.connect(deployer).deposit(d.handle, d.proof)).to.be.revertedWith("pool full");
+  });
+
+  it("lets a saver leave() and frees their participant slot (purge)", async function () {
+    const { pool, alice } = await standard(); // alice/bob/carol in -> count 3
+    expect(await pool.participantCount()).to.equal(3n);
+    await pool.connect(alice).leave();
+    expect(await pool.participantCount()).to.equal(2n);
+    expect(await pool.isParticipant(alice.address)).to.equal(false);
   });
 
   it("no-loss: a saver can withdraw principal at any time", async function () {
