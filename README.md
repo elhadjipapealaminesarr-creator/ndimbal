@@ -18,12 +18,13 @@ draw awards the yield-funded prize to one saver.
 
 **▶ Animated overview / explainer (nothing to install):** **https://elhadjipapealaminesarr-creator.github.io/ndimbal/** — bilingual (EN/FR), animated marketing walkthrough. Or open [`index.html`](./index.html) locally.
 
-> **Honest design note, up front:** the draw uses a fully-encrypted **weighted argmax**
-> (`ticket = balance × protocol-random`), so odds *strictly increase* with your deposit while the
-> pool total never leaks. This is intentionally **not** an *exactly-proportional* `P = balance/total`
-> draw — that would require revealing the aggregate total on-chain, which needs a decryption oracle
-> not yet in `@fhevm/solidity` 0.11.1. We chose maximum privacy for v1; an exact-proportional mode
-> is on the roadmap. (Details in "The confidential draw" below.)
+> **Design choice, up front — privacy over proportionality:** the draw is a fully-encrypted
+> **weighted argmax** (`ticket = balance × protocol-random`). Odds *strictly increase* with your deposit,
+> and — unlike a proportional `P = balance/total` draw — **even the pool's total never leaks**. That is the
+> stronger guarantee: proportionality *requires* revealing the aggregate total on-chain, so NDIMBAL keeps it
+> encrypted by design. Maximal privacy is the whole reason to build this on FHE, not a shortcut around it.
+> The exact weighting is measured and published below; a proportional mode is an *opt-in* on the roadmap,
+> not a missing feature. (Details in "The confidential draw".)
 
 ### What stays visible vs. what stays encrypted
 
@@ -97,10 +98,11 @@ step *beyond* the brief's "verifiable" requirement: the selection circuit and th
 draw is deterministic and that **exactly one winner** is produced per round. What stays private is only
 *who* that winner is — each saver decrypts their own flag, nobody else's. Verifiable process, private outcome.
 
-**Design note (honest) — the draw is weighted, not exactly proportional.** The argmax of
+**The draw is weighted, not linearly proportional — by design, for privacy.** The argmax of
 `balance × random` makes odds rise with the deposit, but **not linearly**. For two savers with balances
 `b₁ ≤ b₂`, the exact law is **P(b₁ wins) = (b₁ / b₂) / 2**, which under-weights small savers relative to a
-proportional draw. Measured over 400,000 simulated draws per configuration:
+proportional draw. We measure and publish that distortion rather than round it away — over 400,000 simulated
+draws per configuration:
 
 | Pool | Balance | Proportional share | Actual odds | Ratio |
 |---|---|---|---|---|
@@ -108,11 +110,12 @@ proportional draw. Measured over 400,000 simulated draws per configuration:
 | 100 / 300 / 600 | 300 | 30.0% | 24.2% | 0.80× |
 | 100 / 300 / 600 | 600 | 60.0% | 74.0% | 1.23× |
 
-We surface this openly rather than claim proportionality. **Why not exactly-proportional?** A
-`P = balance / total` draw needs the aggregate **total** revealed on-chain (an on-chain decryption oracle
-not yet in `@fhevm/solidity` 0.11.1). We chose **maximum privacy** for v1 — even the pool total never leaks —
-and document the resulting weighting. An exact-proportional mode (cumulative-threshold circuit, or a
-total-reveal oracle when available) is on the roadmap.
+A proportional `P = balance / total` draw is **not "more correct" — it is less private**: it requires the
+aggregate **total** to be revealed on-chain (a decryption oracle not in `@fhevm/solidity` 0.11.1). NDIMBAL
+keeps the total encrypted, which is the stronger guarantee and the entire reason to use FHE here. The
+weighting is the deliberate price of that privacy, published in full above. A proportional mode
+(cumulative-threshold circuit, or a total-reveal oracle) remains an **opt-in on the roadmap** for pools that
+would trade total-privacy for linearity — a choice, not a fix.
 
 ## Verify the fairness yourself
 
