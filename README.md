@@ -213,8 +213,8 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x0814191C0cD9B7151437c515ac3618363D8a248b`](https://sepolia.etherscan.io/address/0x0814191C0cD9B7151437c515ac3618363D8a248b#code) | Powers the hosted dApp · all audit fixes through pass 3 (participant cap + `leave()` purge, empty-round advance / no deadlock, participant snapshot at draw, unique tickets, prize cap + excess refund + rollover, double-claim lock, zero-balance guard) · 10-min rounds for a fully playable draw |
-| Confidential token (demo cUSDT) | [`0x7c327605Abb2AE6E1CA24721ff507845AEf30F25`](https://sepolia.etherscan.io/address/0x7c327605Abb2AE6E1CA24721ff507845AEf30F25) | ERC-7984 stand-in for the pool above |
+| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x18ab12b1F33DA1E94eA6a50A561E73924A3d4DEa`](https://sepolia.etherscan.io/address/0x18ab12b1F33DA1E94eA6a50A561E73924A3d4DEa#code) | Powers the hosted dApp · all audit fixes through pass 3 (leave() purge, empty-round advance / no deadlock, participant snapshot at draw, unique tickets, prize cap + excess refund + rollover, double-claim lock, zero-balance guard) · **HCU-proven cap = 3** · 10-min rounds for a fully playable draw |
+| Confidential token (demo cUSDT) | [`0x4bef3d11E6C62da8c51EC4815FCD617A02FC1501`](https://sepolia.etherscan.io/address/0x4bef3d11E6C62da8c51EC4815FCD617A02FC1501) | ERC-7984 stand-in for the pool above |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
