@@ -21,7 +21,7 @@ async function main() {
 
   const ROUND = 600; // 10-min rounds — 8-min deposit window, no timing stress for a live demo
   const LOCK = 120;  // deposits lock 2 min before the draw
-  const MAX = 32;    // max active participants (anti-DoS cap)
+  const MAX = 3;  // HCU-proven cap: draw() reverts at 4 (HCUTransactionDepthLimitExceeded) — see test/capacity-32.test.js    // max active participants (anti-DoS cap)
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
   const pool = await Pool.deploy(tokenAddr, ROUND, LOCK, MAX, deployer.address);
   await pool.waitForDeployment();
