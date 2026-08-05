@@ -17,6 +17,10 @@ module.exports = {
     },
   },
   networks: {
+    // Local test network: 40 funded accounts so the capacity suite can fill the pool to 32.
+    hardhat: {
+      accounts: { count: 40 },
+    },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
