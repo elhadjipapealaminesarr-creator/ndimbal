@@ -18,10 +18,10 @@ async function main() {
   const tokenAddr = await token.getAddress();
   console.log("MockNdimbalToken:", tokenAddr);
 
-  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe), 32-participant cap.
+  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe), 3-participant cap (HCU-proven).
   const DAY = 24 * 3600;
   const LOCK = 3600;
-  const MAX = 32;
+  const MAX = 3;  // PROVEN safe cap: draw() reverts at 4 (HCUTransactionDepthLimitExceeded) — see test/capacity-32.test.js
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
   const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX);
   await pool.waitForDeployment();

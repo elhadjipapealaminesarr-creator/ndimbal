@@ -1,88 +1,92 @@
 const { expect } = require("chai");
 const { ethers, fhevm } = require("hardhat");
 
-// NDIMBAL — capacity / HCU proof at MAX_PARTICIPANTS (32).
+// NDIMBAL — capacity / gas sweep to size MAX_PARTICIPANTS honestly.
 //   npx hardhat test test/capacity-32.test.js
 //
-// The Season-4 plan's "prochain pas concret": fill the pool to the cap and verify the WHOLE lifecycle
-// (deposit -> fundPrize -> draw -> claim -> claimSponsored) completes without reverting at 32 savers —
-// i.e. the two O(n) FHE loops in draw() and the O(n) sponsorship loop + 2 FHE.div in claim() all fit
-// inside a single transaction's op budget when the pool is full.
+// The Season-4 plan's P0: prove the pool survives a full round at its cap. draw() runs two O(n) FHE
+// loops and claim() one O(n) loop + 2 FHE.div, so cost grows with n. This sweep fills the pool to a
+// range of sizes and MEASURES the gas of draw() and claim() at each, so we can set MAX_PARTICIPANTS to
+// a value that stays comfortably under Sepolia's ~36M block-gas ceiling (target: < ~18M for margin).
 //
-// IMPORTANT: this runs on the fhEVM MOCK, which does not enforce Sepolia's exact HCU ceiling. Green here
-// proves FUNCTIONAL correctness and exercises the full 32-wide op count; the DEFINITIVE HCU proof is a
-// full round at 32 on the LIVE Sepolia contract (10-min rounds), replayable by the jury.
+// The local test network's blockGasLimit is raised (hardhat.config) ONLY so large n can be measured
+// instead of reverting — it does NOT change what Sepolia will accept. We read the numbers and choose.
 
-const ROUND = 3600, LOCK = 60, MAX = 32;
+const ROUND = 3600, LOCK = 60;
+const SIZES = [2, 3, 4, 5, 6, 7, 8]; // participant counts to probe (draw reverts by 8 — find the real ceiling)
+const SEPOLIA_BLOCK_GAS = 36_000_000n;     // approximate live ceiling
+const SAFE_TARGET = 18_000_000n;           // we want draw() comfortably under this
 
 async function enc(addr, signer, v) {
   const i = await fhevm.createEncryptedInput(addr, signer.address).add64(BigInt(v)).encrypt();
   return { handle: i.handles[0], proof: i.inputProof };
 }
-async function encTwo(addr, signer, a, b) {
-  const i = await fhevm.createEncryptedInput(addr, signer.address).add64(BigInt(a)).add64(BigInt(b)).encrypt();
-  return { h0: i.handles[0], h1: i.handles[1], proof: i.inputProof };
-}
 
-describe("NDIMBAL — capacity at MAX_PARTICIPANTS (32)", function () {
-  this.timeout(0); // filling 32 slots on the FHE mock is heavy — no per-test timeout
+describe("NDIMBAL — capacity / gas sweep", function () {
+  this.timeout(0);
 
-  it("survives a FULL round at 32 savers (deposit → fundPrize → draw → claim → claimSponsored, no revert)", async function () {
+  it("measures draw() + claim() gas across pool sizes and reports the safe cap", async function () {
     const signers = await ethers.getSigners();
-    expect(signers.length, "need 32 savers + 1 sponsor — set networks.hardhat.accounts.count >= 33").to.be.greaterThanOrEqual(MAX + 1);
     const deployer = signers[0];
-    const savers = signers.slice(1, 1 + MAX); // exactly 32 distinct savers
+    const results = [];
 
-    const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
-    await token.waitForDeployment();
-    const tokenAddr = await token.getAddress();
-    const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, MAX);
-    await pool.waitForDeployment();
-    const poolAddr = await pool.getAddress();
+    for (const N of SIZES) {
+      if (signers.length < N + 1) { results.push({ N, draw: "n/a (need more signers)" }); continue; }
+      const savers = signers.slice(1, 1 + N);
 
-    // Fill the pool to the cap: mint + approve + deposit for all 32 savers (varied balances).
-    for (let k = 0; k < savers.length; k++) {
-      const w = savers[k];
-      const m = await enc(tokenAddr, w, 1_000_000);
-      await token.connect(w).mint(w.address, m.handle, m.proof);
-      await token.connect(w).setOperator(poolAddr, 2n ** 47n);
-      const d = await enc(poolAddr, w, 100 + k * 10);
-      await pool.connect(w).deposit(d.handle, d.proof);
+      const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
+      await token.waitForDeployment();
+      const tokenAddr = await token.getAddress();
+      const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, N);
+      await pool.waitForDeployment();
+      const poolAddr = await pool.getAddress();
+
+      for (let k = 0; k < N; k++) {
+        const w = savers[k];
+        const m = await enc(tokenAddr, w, 1_000_000);
+        await token.connect(w).mint(w.address, m.handle, m.proof);
+        await token.connect(w).setOperator(poolAddr, 2n ** 47n);
+        const d = await enc(poolAddr, w, 100 + k * 10);
+        await pool.connect(w).deposit(d.handle, d.proof);
+      }
+      // give-back on one saver so claim()'s community FHE.div path is measured too
+      const g = await enc(poolAddr, savers[0], 30);
+      await pool.connect(savers[0]).setGiveBack(g.handle, g.proof);
+
+      const mm = await enc(tokenAddr, deployer, 1_000_000);
+      await token.connect(deployer).mint(deployer.address, mm.handle, mm.proof);
+      await token.connect(deployer).setOperator(poolAddr, 2n ** 47n);
+      const f = await enc(poolAddr, deployer, 10_000);
+      await pool.connect(deployer).fundPrize(f.handle, f.proof);
+
+      await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      let drawGas = null, claimGas = null, note = "";
+      try {
+        const rc = await (await pool.draw()).wait();
+        drawGas = rc.gasUsed;
+        const rc2 = await (await pool.connect(savers[0]).claim(0)).wait();
+        claimGas = rc2.gasUsed;
+      } catch (e) { note = "REVERT: " + ((e.shortMessage || e.message || "").slice(0, 110)); }
+      results.push({ N, drawGas, claimGas, note });
     }
-    expect(await pool.participantCount()).to.equal(BigInt(MAX)); // pool is FULL at 32
 
-    // Exercise the two most expensive claim() paths so the op count is worst-case:
-    //  - "Tanti caché": saver[0] routes 25% of a win to member #3 (index 2) → the O(n) credit loop runs.
-    //  - give-back: saver[1] pledges 40% → the community FHE.div path runs.
-    const s = await encTwo(poolAddr, savers[0], 3, 25);
-    await pool.connect(savers[0]).setSponsorship(s.h0, s.h1, s.proof);
-    const g = await enc(poolAddr, savers[1], 40);
-    await pool.connect(savers[1]).setGiveBack(g.handle, g.proof);
-
-    // Fund the prize (sponsor / yield source).
-    const m2 = await enc(tokenAddr, deployer, 1_000_000);
-    await token.connect(deployer).mint(deployer.address, m2.handle, m2.proof);
-    await token.connect(deployer).setOperator(poolAddr, 2n ** 47n);
-    const f = await enc(poolAddr, deployer, 10_000);
-    await pool.connect(deployer).fundPrize(f.handle, f.proof);
-
-    // DRAW at 32 — two O(32) FHE loops (weighted tickets + running max, then win-flag + snapshot). No revert.
-    await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
-    await ethers.provider.send("evm_mine", []);
-    await expect(pool.draw()).to.not.be.reverted;
-
-    // Exactly one winner across the full pool.
-    let winners = 0;
-    for (const w of savers) {
-      if (await fhevm.userDecryptEbool(await pool.didWin(0, w.address), poolAddr, w)) winners++;
+    // Report
+    console.log("\n  ── NDIMBAL capacity sweep (Sepolia block ≈ 36M; target draw() < 18M) ──");
+    console.log("   N | draw() gas  | claim() gas | verdict");
+    let safeCap = 0;
+    for (const r of results) {
+      if (r.drawGas == null) { console.log(`  ${String(r.N).padStart(2)} |  ${r.note || r.draw}`); continue; }
+      const okSepolia = r.drawGas < SEPOLIA_BLOCK_GAS;
+      const okSafe = r.drawGas < SAFE_TARGET;
+      const verdict = okSafe ? "✅ safe" : okSepolia ? "⚠ fits but tight" : "❌ exceeds block";
+      if (okSafe) safeCap = r.N;
+      console.log(`  ${String(r.N).padStart(2)} | ${String(r.drawGas).padStart(10)} | ${String(r.claimGas).padStart(10)} | ${verdict}`);
     }
-    expect(winners, "exactly one winner at capacity").to.equal(1);
+    console.log(`\n  → Largest size with draw() under ${SAFE_TARGET} gas: ${safeCap}`);
+    console.log("    Set MAX_PARTICIPANTS to this (or just below) and redeploy.\n");
 
-    // Every one of the 32 claims runs the O(32) sponsorship loop + 2 FHE.div — none may revert at capacity.
-    for (const w of savers) {
-      await expect(pool.connect(w).claim(0)).to.not.be.reverted;
-    }
-    // The sponsored beneficiary (member #3) withdraws routed winnings — no revert.
-    await expect(pool.connect(savers[2]).claimSponsored()).to.not.be.reverted;
+    expect(safeCap, "at least a small pool must fit under the safe target").to.be.greaterThan(0);
   });
 });

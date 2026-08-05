@@ -20,6 +20,8 @@ module.exports = {
     // Local test network: 40 funded accounts so the capacity suite can fill the pool to 32.
     hardhat: {
       accounts: { count: 40 },
+      blockGasLimit: 200_000_000,
+      allowUnlimitedContractSize: true,
     },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",

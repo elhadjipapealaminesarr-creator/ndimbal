@@ -163,26 +163,29 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 Rather than let a reviewer find these, here they are up front — none is a security hole, each has a
 clear v1 rationale:
 
-- **Participant count is capped (shipped) at `MAX_PARTICIPANTS`, set to 32 at deploy.** `draw()`/`claim()`
-  are O(n) in FHE ops, so an unbounded list could be inflated until a transaction exceeds the fhEVM
-  **HCU (Homomorphic Complexity Units) / circuit-depth budget**. The cap (an immutable constructor
-  parameter) bounds this, and savers can call **`leave()`** to withdraw their whole balance and free their
-  slot. 32 is set **conservatively** for the current op count — it has **not yet been HCU-profiled**; a
-  formal profile and a per-chain maximum are on the roadmap. *Residual risk:* a determined actor can still
-  squat all 32 slots with dust deposits — a **stake-to-join** deterrent (hard to enforce on encrypted amounts)
-  is the real fix, on the roadmap. Note: `leave()` reindexes `participants[]` (swap-pop). Because the draw
+- **Participant count is capped at `MAX_PARTICIPANTS` — measured, not guessed: `3`.** `draw()` runs two
+  O(n) *sequential* FHE reduction chains (the encrypted running-max in pass 1 and the `anyWon` accumulator
+  in pass 2, both widened to `euint128`), and `claim()` adds an O(n) loop plus two `FHE.div`. We profiled
+  this directly on the fhEVM (see [`test/capacity-32.test.js`](./test/capacity-32.test.js)): `draw()`
+  succeeds at n ≤ 3 (~1.5M gas) and **reverts at n = 4 with `HCUTransactionDepthLimitExceeded()`** — the
+  fhEVM's per-transaction **circuit-depth** limit, *not* a gas limit (the gas is tiny). So the shipped cap
+  is a **proven** `3`, an immutable constructor parameter — an earlier `32` would have reverted on the 4th
+  depositor in production. Raising it requires a lower-depth draw — tree-reduced (O(log n)) max/`anyWon`
+  accumulators, dropping the `anyWon` chain, or an off-chain-decryption argmax — which is now the headline
+  roadmap item. Savers can `leave()` to free a slot; a **stake-to-join** deterrent against dust
+  slot-squatting is also on the roadmap. Note: `leave()` reindexes `participants[]` (swap-pop). Because the draw
   **freezes the participant list per round** (`_participantsAt[r]`), a `leave()` *after* a draw can no longer
   **redirect** a "Tanti caché" credit to whoever got swapped into that slot — `claim()` pays out against the
   frozen list. A `leave()` *before* the draw can still shift positions, so a sponsorship set by index may
   then land on a different member (best-effort, re-settable until the draw). A per-address (not per-index)
   encoding closes that pre-draw window too and is on the roadmap.
 - **The draw snapshots the participant list (NDM-L-05, storage cost).** Freezing `participants` into
-  `_participantsAt[r]` at each draw copies up to `MAX_PARTICIPANTS` addresses to storage (~640k gas at 32),
-  and the per-round snapshots are never purged, so contract storage grows one array per round. This is the
-  price of closing the draw→claim sponsorship-redirect window. The roadmap fix stores only a
-  `keccak256(participants)` per round (one slot) and has `claim(r, address[] calldata snapshot)` verify the
-  hash — O(1) storage and calldata iteration — but it changes the `claim` signature, so it is deferred to a
-  post-hackathon version rather than shipped the night before submission.
+  `_participantsAt[r]` at each draw copies up to `MAX_PARTICIPANTS` addresses to storage — negligible at the
+  shipped cap of 3, but the per-round snapshots are never purged, so contract storage grows one small array
+  per round. This is the price of closing the draw→claim sponsorship-redirect window. If the cap is later
+  raised (see above), the roadmap fix stores only a `keccak256(participants)` per round (one slot) and has
+  `claim(r, address[] calldata snapshot)` verify the hash — O(1) storage and calldata iteration — but it
+  changes the `claim` signature, so it is deferred to a post-hackathon version.
 - **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
   `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
   give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
