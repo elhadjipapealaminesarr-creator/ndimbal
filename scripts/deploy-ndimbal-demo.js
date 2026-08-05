@@ -23,14 +23,14 @@ async function main() {
   const LOCK = 120;  // deposits lock 2 min before the draw
   const MAX = 32;    // max active participants (anti-DoS cap)
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
-  const pool = await Pool.deploy(tokenAddr, ROUND, LOCK, MAX);
+  const pool = await Pool.deploy(tokenAddr, ROUND, LOCK, MAX, deployer.address);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   console.log("NdimbalPool     :", poolAddr, `(round=${ROUND}s, lock=${LOCK}s, max=${MAX})`);
 
   console.log("\nPoint app.html at these addresses. Verify the source on Etherscan with:");
   console.log(`  npx hardhat verify --network sepolia ${tokenAddr}`);
-  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${ROUND} ${LOCK} ${MAX}`);
+  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${ROUND} ${LOCK} ${MAX} ${deployer.address}`);
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; });

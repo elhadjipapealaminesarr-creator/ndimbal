@@ -146,7 +146,7 @@ design note above. A chi-square goodness-of-fit test against the target law is o
 ```bash
 npm install
 npx hardhat compile
-npx hardhat test test/NdimbalPool.test.js     # 27 passing
+npx hardhat test test/NdimbalPool.test.js     # 28 passing
 npm run verify:draw                            # fairness harness (optional, great for reviewers)
 cp .env.example .env                           # then fill in PRIVATE_KEY, RPC, ETHERSCAN_API_KEY
 npx hardhat run scripts/deploy.js --network sepolia
@@ -155,7 +155,7 @@ npx hardhat run scripts/deploy.js --network sepolia
 The deploy script prints the two `npx hardhat verify` commands for Etherscan source verification.
 
 **Security posture:** `nonReentrant` on all token-touching functions, anti-snipe deposit lock
-(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** plus a voluntary **`leave()`** purge against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize cap + rollover** (no overflow, and a no-winner round never burns the pot), a **double-claim lock**, and a **`private`** `claimed` flag. These harden findings from an **independent security review**: every item affecting **saver principal or draw availability** is fixed with regression tests. The remaining review items are **deliberate v1 trade-offs, documented honestly below** — chiefly the single-key community fund (`sweepCommunityFund`) and the winner's metadata-level (not cryptographic) linkability. Ticket math uses
+(`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** plus a voluntary **`leave()`** purge against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize cap + rollover** (no overflow, and a no-winner round never burns the pot), a **double-claim lock**, and a **`private`** `claimed` flag. These harden findings from an **independent security review**: every item affecting **saver principal or draw availability** is fixed with regression tests. The community fund now routes only to an **immutable beneficiary** (no admin key). The remaining review items are **deliberate v1 trade-offs, documented honestly below** — chiefly the per-round capacity cap (HCU circuit-depth) and the winner's metadata-level (not cryptographic) linkability. Ticket math uses
 `euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
 
 ## Known limits (documented on purpose)
@@ -186,10 +186,13 @@ clear v1 rationale:
   raised (see above), the roadmap fix stores only a `keccak256(participants)` per round (one slot) and has
   `claim(r, address[] calldata snapshot)` verify the hash — O(1) storage and calldata iteration — but it
   changes the `claim` signature, so it is deferred to a post-hackathon version.
-- **The community fund is swept by a single admin key.** `sweepCommunityFund(to)` is guarded by one
-  `admin` (the deployer), with no timelock or multisig, and `to` is unconstrained. The *individual*
-  give-back is fully trustless and encrypted; the *aggregate* fund's destination is not, in v1. A
-  Gnosis Safe or an immutable beneficiary is the roadmap fix.
+- **The community fund goes to an immutable beneficiary — no admin key (was NDM-M-05, now fixed).**
+  `sweepCommunityFund()` takes no `to` and has no `admin` check: it routes the aggregate fund only to
+  `communityBeneficiary`, an `immutable` address fixed at deploy that no function can change. The call is
+  deliberately **permissionless** — anyone may trigger it, because the destination is not a choice, so it
+  can never be used to divert funds. This removes the contract's only centralised trust point (the earlier
+  single-admin, unconstrained-`to` sweep). Pointing the beneficiary at a Gnosis Safe or DAO at deploy time
+  is a config choice, not a code change.
 - **The draw needs a trigger.** `draw()` is permissionless — anyone can call it once the round ends, so
   the operator can't game it — but if nobody calls it, deposits stay locked. Production would add a
   keeper (Chainlink Automation or similar); for the demo, evaluators trigger it themselves.

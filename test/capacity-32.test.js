@@ -37,7 +37,7 @@ describe("NDIMBAL — capacity / gas sweep", function () {
       const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
       await token.waitForDeployment();
       const tokenAddr = await token.getAddress();
-      const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, N);
+      const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, N, deployer.address);
       await pool.waitForDeployment();
       const poolAddr = await pool.getAddress();
 

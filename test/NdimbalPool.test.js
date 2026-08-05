@@ -50,16 +50,17 @@ async function advanceToDraw() {
   await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
   await ethers.provider.send("evm_mine", []);
 }
-async function deployPool(maxParticipants = 32) {
+async function deployPool(maxParticipants = 32, beneficiary) {
   const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();
-  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, maxParticipants);
+  const ben = beneficiary || (await ethers.getSigners())[0].address; // immutable community-fund beneficiary
+  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, maxParticipants, ben);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   return { token, tokenAddr, pool, poolAddr };
 }
-// Standard 3-saver pool: alice 100, bob 300, carol 600, prize 1000. deployer = admin + sponsor.
+// Standard 3-saver pool: alice 100, bob 300, carol 600, prize 1000. deployer = sponsor + default beneficiary.
 async function standard() {
   const [deployer, alice, bob, carol] = await ethers.getSigners();
   const { token, tokenAddr, pool, poolAddr } = await deployPool();
@@ -186,6 +187,15 @@ describe("NdimbalPool", function () {
     await pool.connect(alice).leave();
     expect(await pool.participantCount()).to.equal(2n);
     expect(await pool.isParticipant(alice.address)).to.equal(false);
+  });
+
+  it("has no admin key — the community fund can only reach the immutable beneficiary (NDM-M-05)", async function () {
+    const [deployer, alice, bob] = await ethers.getSigners();
+    const { pool } = await deployPool(32, bob.address); // beneficiary fixed at deploy
+    expect(await pool.communityBeneficiary()).to.equal(bob.address); // public + immutable, no setter exists
+    // sweep is permissionless (there is no admin) — a random account may trigger it, but the destination
+    // is not a choice, so funds can never be diverted. This must NOT revert for a non-deployer caller.
+    await expect(pool.connect(alice).sweepCommunityFund()).to.not.be.reverted;
   });
 
   it("caps the prize at MAX_PRIZE and refunds the excess to the funder (fundPrize)", async function () {
@@ -321,7 +331,7 @@ describe("NdimbalPool", function () {
   it("applies the private give-back split correctly on claim", async function () {
     // sole depositor => deterministic winner, so we can assert exact token flows
     const [deployer, alice, bob] = await ethers.getSigners();
-    const { token, tokenAddr, pool, poolAddr } = await deployPool();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool(32, bob.address); // bob = immutable beneficiary
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
     await mintAndApprove(token, tokenAddr, poolAddr, alice, 1_000_000);
     await deposit(pool, poolAddr, alice, 100);
@@ -335,8 +345,8 @@ describe("NdimbalPool", function () {
     const aliceBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
     expect(aliceBal).to.equal(1_000_600n);
 
-    // the 300 community share is sweepable by the admin (deployer) to any cause
-    await pool.connect(deployer).sweepCommunityFund(bob.address);
+    // the 300 community share can only ever go to the IMMUTABLE beneficiary (bob) — permissionless, no admin
+    await pool.connect(alice).sweepCommunityFund();
     const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
     expect(bobBal).to.equal(300n);
   });
@@ -428,7 +438,7 @@ describe("NdimbalPool", function () {
 
   it("freezes give-back at draw time (a winner cannot renege after winning)", async function () {
     const [deployer, alice, bob] = await ethers.getSigners();
-    const { token, tokenAddr, pool, poolAddr } = await deployPool();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool(32, bob.address); // bob = immutable beneficiary
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
     await mintAndApprove(token, tokenAddr, poolAddr, alice, 1_000_000);
     await deposit(pool, poolAddr, alice, 100);
@@ -442,7 +452,7 @@ describe("NdimbalPool", function () {
     // the snapshot (30%) is applied, NOT the reneged 0% => alice keeps 700, community keeps 300
     const aliceBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
     expect(aliceBal).to.equal(1_000_600n);
-    await pool.connect(deployer).sweepCommunityFund(bob.address);
+    await pool.connect(alice).sweepCommunityFund();
     const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
     expect(bobBal).to.equal(300n);
   });

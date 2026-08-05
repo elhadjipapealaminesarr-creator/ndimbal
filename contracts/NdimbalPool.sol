@@ -29,7 +29,9 @@ import {INdimbalToken} from "./INdimbalToken.sol";
 ///         euint128 for very large pools. Target chain: Sepolia.
 contract NdimbalPool is ZamaEthereumConfig {
     INdimbalToken public immutable token; // ERC-7984 confidential settlement token
-    address public admin;
+    // Where the aggregate community fund can be swept — FIXED at deploy, never changeable. There is no
+    // admin key and no arbitrary destination, so the pool has no centralised point that can divert funds.
+    address public immutable communityBeneficiary;
 
     uint256 public round;           // current round id
     uint64 public roundDuration;    // seconds between draws
@@ -87,11 +89,18 @@ contract NdimbalPool is ZamaEthereumConfig {
     event SponsorshipSet(address indexed sponsor);
     event SponsoredClaimed(address indexed beneficiary);
 
-    constructor(INdimbalToken _token, uint64 _roundDuration, uint64 _lockWindow, uint256 _maxParticipants) {
+    constructor(
+        INdimbalToken _token,
+        uint64 _roundDuration,
+        uint64 _lockWindow,
+        uint256 _maxParticipants,
+        address _communityBeneficiary
+    ) {
         require(_lockWindow < _roundDuration, "lock >= duration");
         require(_maxParticipants > 0, "max=0");
+        require(_communityBeneficiary != address(0), "beneficiary=0");
         token = _token;
-        admin = msg.sender;
+        communityBeneficiary = _communityBeneficiary; // immutable: the community fund can only ever go here
         roundDuration = _roundDuration;
         lockWindow = _lockWindow;
         MAX_PARTICIPANTS = _maxParticipants;
@@ -405,15 +414,17 @@ contract NdimbalPool is ZamaEthereumConfig {
         emit SponsoredClaimed(msg.sender);
     }
 
-    /// @notice Route the accrued community fund to a cause (governance / admin).
-    function sweepCommunityFund(address to) external nonReentrant {
-        require(msg.sender == admin, "not admin");
+    /// @notice Sweep the accrued community fund to the IMMUTABLE beneficiary fixed at deploy. Deliberately
+    ///         permissionless — anyone may trigger it, because the destination is not a choice: there is no
+    ///         admin key and no arbitrary `to`, so this can never be used to divert funds. This removes the
+    ///         contract's only centralised trust point (the previous single-admin, free-`to` sweep).
+    function sweepCommunityFund() external nonReentrant {
         euint64 amt = _communityFund;
         _communityFund = FHE.asEuint64(0);
         FHE.allowThis(_communityFund);
         FHE.allowTransient(amt, address(token));
-        token.confidentialTransfer(to, amt);
-        emit CommunityFundSwept(to);
+        token.confidentialTransfer(communityBeneficiary, amt);
+        emit CommunityFundSwept(communityBeneficiary);
     }
 
     // ------------------------------------------------------------------ views (ciphertext handles)

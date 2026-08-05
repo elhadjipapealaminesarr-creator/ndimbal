@@ -23,14 +23,14 @@ async function main() {
   const LOCK = 3600;
   const MAX = 32;
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
-  const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX);
+  const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX, deployer.address);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   console.log("NdimbalPool     :", poolAddr);
 
   console.log("\nSave these addresses. Verify the source on Etherscan with:");
   console.log(`  npx hardhat verify --network sepolia ${tokenAddr}`);
-  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK} ${MAX}`);
+  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK} ${MAX} ${deployer.address}`);
 }
 
 main().catch((e) => {
