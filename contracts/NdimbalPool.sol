@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {FHE, euint32, euint64, euint128, ebool, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {INdimbalToken} from "./INdimbalToken.sol";
+import {IConfidentialVault} from "./IConfidentialVault.sol";
 
 /// @title NDIMBAL — the no-loss prize-savings pool where winning lifts the whole community, privately
 /// @author El Hadji Pape Alamine Sarr (Kaddu) — Zama Developer Program, Mainnet Season 4
@@ -29,6 +30,13 @@ import {INdimbalToken} from "./INdimbalToken.sol";
 ///         euint128 for very large pools. Target chain: Sepolia.
 contract NdimbalPool is ZamaEthereumConfig {
     INdimbalToken public immutable token; // ERC-7984 confidential settlement token
+
+    // --- yield source (Morpho) — the prize is GENERATED, not hand-injected ---
+    // Confidential yield vault the pool routes idle capital through. address(0) = yield disabled (manual
+    // fundPrize only). On Sepolia this is MockConfidentialVault; on mainnet, the real Steakhouse Confidential
+    // Prime USDC vault (cUSDC 0xe978…72B2) — same IConfidentialVault interface, only the address differs.
+    IConfidentialVault public immutable yieldVault;
+    euint64 private _vaultPrincipal; // encrypted principal placed in the vault; harvested yield = position - this
     // Where the aggregate community fund can be swept — FIXED at deploy, never changeable. There is no
     // admin key and no arbitrary destination, so the pool has no centralised point that can divert funds.
     address public immutable communityBeneficiary;
@@ -88,27 +96,36 @@ contract NdimbalPool is ZamaEthereumConfig {
     event CommunityFundSwept(address indexed to);
     event SponsorshipSet(address indexed sponsor);
     event SponsoredClaimed(address indexed beneficiary);
+    event VaultFunded(address indexed from); // capital routed into the yield vault
+    event YieldHarvested();                   // vault yield skimmed into the prize
 
     constructor(
         INdimbalToken _token,
         uint64 _roundDuration,
         uint64 _lockWindow,
         uint256 _maxParticipants,
-        address _communityBeneficiary
+        address _communityBeneficiary,
+        address _yieldVault
     ) {
         require(_lockWindow < _roundDuration, "lock >= duration");
         require(_maxParticipants > 0, "max=0");
+        require(_maxParticipants < 256, "max>=256"); // hard upper bound (well above the HCU-proven cap)
         require(_communityBeneficiary != address(0), "beneficiary=0");
         token = _token;
         communityBeneficiary = _communityBeneficiary; // immutable: the community fund can only ever go here
+        yieldVault = IConfidentialVault(_yieldVault); // address(0) = yield disabled (manual fundPrize only)
         roundDuration = _roundDuration;
         lockWindow = _lockWindow;
         MAX_PARTICIPANTS = _maxParticipants;
         roundStart = uint64(block.timestamp);
         _prizePot = FHE.asEuint64(0);
         _communityFund = FHE.asEuint64(0);
+        _vaultPrincipal = FHE.asEuint64(0);
         FHE.allowThis(_prizePot);
         FHE.allowThis(_communityFund);
+        FHE.allowThis(_vaultPrincipal);
+        // Let the vault pull this pool's tokens when we route capital into it (ERC-7984 operator flow).
+        if (_yieldVault != address(0)) token.setOperator(_yieldVault, type(uint48).max);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -260,6 +277,45 @@ contract NdimbalPool is ZamaEthereumConfig {
         FHE.allowTransient(excess, address(token));
         token.confidentialTransfer(msg.sender, excess);
         emit PrizeFunded(msg.sender);
+    }
+
+    // ------------------------------------------------------------------ real yield (Morpho)
+    /// @notice Route confidential capital into the yield vault. The caller supplies the amount; it is pulled
+    ///         into the pool, deposited into the vault, and the pool's principal is tracked so `harvestYield()`
+    ///         can later skim only the yield. This is what makes the prize GENERATED (from a live DeFi strategy)
+    ///         rather than hand-injected by a sponsor. The caller must have set this pool as a token operator.
+    /// @dev    On Sepolia the vault is a mock; on mainnet it is the real Steakhouse Confidential Prime USDC
+    ///         vault on Morpho. Nothing here ever leaks a balance — the amount placed stays encrypted.
+    function fundVault(externalEuint64 encAmount, bytes calldata inputProof) external nonReentrant {
+        require(address(yieldVault) != address(0), "no vault");
+        euint64 amt = FHE.fromExternal(encAmount, inputProof);
+        FHE.allowTransient(amt, address(token));
+        euint64 got = token.confidentialTransferFrom(msg.sender, address(this), amt); // caller -> pool
+        FHE.allowTransient(got, address(yieldVault));
+        euint64 placed = yieldVault.deposit(got);                                     // pool -> vault
+        _vaultPrincipal = FHE.add(_vaultPrincipal, placed);
+        FHE.allowThis(_vaultPrincipal);
+        emit VaultFunded(msg.sender);
+    }
+
+    /// @notice Skim the yield the vault earned (position − principal) into the current round's prize.
+    ///         Permissionless — the destination (the prize pot) is not a choice. Principal stays invested and
+    ///         keeps earning. If the vault ever lost value (position < principal), yield is exactly zero: it
+    ///         never underflows and never touches principal. This is the line that turns NDIMBAL from a
+    ///         sponsor-funded demo into a real yield system.
+    function harvestYield() external nonReentrant {
+        require(address(yieldVault) != address(0), "no vault");
+        euint64 pos = yieldVault.confidentialBalanceOf(address(this));
+        ebool gain = FHE.gt(pos, _vaultPrincipal);
+        euint64 yieldAmt = FHE.select(gain, FHE.sub(pos, _vaultPrincipal), FHE.asEuint64(0)); // max(pos-principal, 0)
+        FHE.allowTransient(yieldAmt, address(yieldVault));
+        euint64 got = yieldVault.redeem(yieldAmt); // vault -> pool: only the yield, principal stays invested
+        // Add to the prize under the same overflow-safe cap as fundPrize.
+        euint64 headroom = FHE.sub(FHE.asEuint64(MAX_PRIZE), _prizePot);
+        euint64 accepted = FHE.min(got, headroom);
+        _prizePot = FHE.add(_prizePot, accepted);
+        FHE.allowThis(_prizePot);
+        emit YieldHarvested();
     }
 
     // ------------------------------------------------------------------ the draw

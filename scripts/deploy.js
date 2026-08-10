@@ -22,15 +22,24 @@ async function main() {
   const DAY = 24 * 3600;
   const LOCK = 3600;
   const MAX = 3;  // PROVEN safe cap: draw() reverts at 4 (HCUTransactionDepthLimitExceeded) — see test/capacity-32.test.js
+  // Confidential yield vault — Sepolia mock of the Steakhouse Confidential Prime USDC vault (Morpho).
+  // In production, pass the real mainnet vault address instead (cUSDC 0xe978…72B2).
+  const Vault = await hre.ethers.getContractFactory("MockConfidentialVault");
+  const vault = await Vault.deploy(tokenAddr);
+  await vault.waitForDeployment();
+  const vaultAddr = await vault.getAddress();
+  console.log("MockConfidentialVault:", vaultAddr);
+
   const Pool = await hre.ethers.getContractFactory("NdimbalPool");
-  const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX, deployer.address);
+  const pool = await Pool.deploy(tokenAddr, DAY, LOCK, MAX, deployer.address, vaultAddr);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   console.log("NdimbalPool     :", poolAddr);
 
   console.log("\nSave these addresses. Verify the source on Etherscan with:");
   console.log(`  npx hardhat verify --network sepolia ${tokenAddr}`);
-  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK} ${MAX} ${deployer.address}`);
+  console.log(`  npx hardhat verify --network sepolia ${vaultAddr} ${tokenAddr}`);
+  console.log(`  npx hardhat verify --network sepolia ${poolAddr} ${tokenAddr} ${DAY} ${LOCK} ${MAX} ${deployer.address} ${vaultAddr}`);
 }
 
 main().catch((e) => {

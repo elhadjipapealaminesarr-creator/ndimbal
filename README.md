@@ -161,6 +161,32 @@ The deploy script prints the two `npx hardhat verify` commands for Etherscan sou
 (`lockWindow`), one draw per round (`drawn[round]`), balance-clamped withdrawals, give-back % + sponsorship snapshotted at draw (no post-win front-running), a **zero-balance guard** so an emptied account can never win, a **participant cap** plus a voluntary **`leave()`** purge against draw-DoS, **strictly-unique tickets** so two savers can never tie-win (no-loss holds), a **prize cap + rollover** (no overflow, and a no-winner round never burns the pot), a **double-claim lock**, and a **`private`** `claimed` flag. These harden findings from an **independent security review**: every item affecting **saver principal or draw availability** is fixed with regression tests. The community fund now routes only to an **immutable beneficiary** (no admin key). The remaining review items are **deliberate v1 trade-offs, documented honestly below** — chiefly the per-round capacity cap (HCU circuit-depth) and the winner's metadata-level (not cryptographic) linkability. Ticket math uses
 `euint128` (`balance × randEuint32`) — overflow-safe even for very large pools.
 
+## Real yield — the prize is *generated*, not injected (Morpho)
+
+The Season-4 brief asks for a prize funded by **real yield on the deposited capital**, not a number a sponsor
+types into `fundPrize()`. NDIMBAL routes confidential capital through a **confidential yield vault** and skims
+**only the yield** into each round's prize — the principal stays invested and nothing ever leaks:
+
+- `fundVault(encAmount, proof)` places confidential capital into the vault and tracks the encrypted principal.
+- `harvestYield()` computes `yield = vaultPosition − principal` and moves **only that** into `_prizePot`.
+  It is **permissionless** (the destination is the prize pot, not a choice), never touches principal, and if the
+  vault ever *lost* value (`position < principal`) the yield is exactly **zero** — an encrypted `select`, no
+  underflow. Same overflow-safe cap as `fundPrize`.
+- The vault is reached through a small `IConfidentialVault` interface, so the pool is **vault-agnostic**.
+
+**Infrastructure research (mainnet vs testnet — verified, not assumed).** Zama's real confidential yield venue,
+the **Steakhouse Confidential Prime USDC vault on Morpho**, and the real **cUSDC** (`0xe978…72B2`) are **Ethereum
+mainnet only** — there is *no* confidential yield vault on Sepolia today. Sepolia *does* have ERC-7984 confidential
+tokens (e.g. Cipherproof's cUSDC, Riser's wrappers). So NDIMBAL ships, on the bounty's Sepolia target, a
+[`MockConfidentialVault`](./contracts/mocks/MockConfidentialVault.sol) that mirrors the real vault's surface with
+**simulated** yield; in production the **same** `IConfidentialVault` adapter points at the real mainnet vault —
+**one constructor address, zero NDIMBAL code change**. Proven end-to-end by
+[`test/NdimbalYield.test.js`](./test/NdimbalYield.test.js) (fund → yield → harvest → draw → the winner's prize *is*
+the yield) and [`test/MockConfidentialVault.test.js`](./test/MockConfidentialVault.test.js).
+
+> *One-line pitch:* the principal never moves (no-loss), but the yield that grows it comes from a real DeFi
+> strategy — confidential end-to-end, like the rest of the pool.
+
 ## Known limits (documented on purpose)
 
 Rather than let a reviewer find these, here they are up front — none is a security hole, each has a

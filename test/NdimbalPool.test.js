@@ -55,7 +55,7 @@ async function deployPool(maxParticipants = 32, beneficiary) {
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();
   const ben = beneficiary || (await ethers.getSigners())[0].address; // immutable community-fund beneficiary
-  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, maxParticipants, ben);
+  const pool = await (await ethers.getContractFactory("NdimbalPool")).deploy(tokenAddr, ROUND, LOCK, maxParticipants, ben, ethers.ZeroAddress);
   await pool.waitForDeployment();
   const poolAddr = await pool.getAddress();
   return { token, tokenAddr, pool, poolAddr };
