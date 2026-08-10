@@ -3,8 +3,11 @@
 This file is appended automatically by the [`fairness.yml`](./.github/workflows/fairness.yml)
 GitHub Action. Each row is one run of the fairness harness
 ([`test/verify-draw.test.js`](./test/verify-draw.test.js)) over **200 simulated draws**, confirming
-that (1) every round has **exactly one winner** and (2) a bigger deposit wins **more often** — while
-no balance, pool total or ticket is ever revealed.
+that (1) every round has **exactly three winners** (the top-3) and (2) a bigger deposit lands in the
+top-3 **more often** — while no balance, pool total or ticket is ever revealed.
+
+> Rows dated before 2026-08-10 recorded the earlier **single-winner** draw; from the top-3 upgrade on,
+> the harness (and each new row) verifies **exactly three winners** per round.
 
 > **Guard-rail:** these results come exclusively from **synthetic test accounts** on the fhEVM mock.
 > The workflow never reads or publishes any real depositor's balance, ticket, or the real pool total.

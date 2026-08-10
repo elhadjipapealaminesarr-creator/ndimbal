@@ -5,7 +5,7 @@ name: Fairness proof (simulated)
 # GUARD-RAIL (non-negotiable): this workflow NEVER reads or publishes real pool data —
 # no real balances, no real tickets, no real pool total. It only re-runs the fairness
 # harness (test/verify-draw.test.js) on the fhEVM mock with its own throw-away accounts,
-# then logs a binary result (exactly-one-winner + odds-rise-with-deposit). Everything it
+# then logs a binary result (exactly-three-winners + odds-rise-with-deposit). Everything it
 # writes is derived from synthetic data, exactly what the harness already does by design.
 
 on:
@@ -40,7 +40,7 @@ jobs:
           TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           if [ "${{ steps.harness.outcome }}" = "success" ]; then
-            RES="PASS — exactly one winner every round; bigger deposit won more"
+            RES="PASS — exactly three winners (top-3) every round; bigger deposit lands in the top-3 more"
           else
             RES="FAIL — see run log"
           fi
