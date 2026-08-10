@@ -1,8 +1,8 @@
 // Deploy NDIMBAL to the configured network (Sepolia).
 //   npx hardhat run scripts/deploy-ndimbal.js --network sepolia
 //
-// Deploys a confidential token (demo cUSDT stand-in) + the NdimbalPool.
-// In production, pass Zama's real confidential USDT (cUSDT) address instead of the mock.
+// Deploys a confidential token (demo cUSDC stand-in) + the NdimbalPool.
+// In production, pass Zama's real confidential USDT (cUSDC) address instead of the mock.
 const hre = require("hardhat");
 
 async function main() {
@@ -11,7 +11,7 @@ async function main() {
   const bal = await hre.ethers.provider.getBalance(deployer.address);
   console.log("Balance :", hre.ethers.formatEther(bal), "ETH\n");
 
-  // 1) Confidential settlement token (demo). Replace with the real cUSDT address for production.
+  // 1) Confidential settlement token (demo). Replace with the real cUSDC address for production.
   const Token = await hre.ethers.getContractFactory("MockNdimbalToken");
   const token = await Token.deploy();
   await token.waitForDeployment();

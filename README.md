@@ -7,7 +7,7 @@
 [![Fairness (simulated)](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/workflows/fairness.yml/badge.svg)](./FAIRNESS_LOG.md)
 
 **A confidential PoolTogether built on Zama fhEVM.** Savers deposit a confidential token
-(ERC-7984, e.g. cUSDT), **keep their principal (withdraw any time — no loss)**, and a periodic
+(ERC-7984, e.g. cUSDC), **keep their principal (withdraw any time — no loss)**, and a periodic
 draw awards the yield-funded prize to one saver.
 
 > *NDIMBAL means "mutual aid" in Wolof.* What makes it unique, and **only possible with FHE**:
@@ -46,7 +46,7 @@ Live at **https://ndimbal-rho.vercel.app** (source: [`ndimbal-dapp`](https://git
 
 A guided **7-step** flow lets anyone play a full round:
 
-1. **Get test tokens** — mint demo cUSDT and authorize the pool.
+1. **Get test tokens** — mint demo cUSDC and authorize the pool.
 2. **Deposit** — your amount is FHE-encrypted client-side; withdraw any time (no loss).
 3. **Solidarity dial** — privately pre-set what share of a win you'd give back to the community.
 4. **Tanti caché (hidden benefactor)** — secretly route a share of your prize to a chosen member *if you win*; nobody learns who gave, to whom, or how much.
@@ -71,7 +71,7 @@ total never leaks.**
 | Requirement (bounty) | How NDIMBAL delivers |
 |---|---|
 | Deposits, balances, winnings **encrypted** | Balances are FHE ciphertexts (`euint64`); settlement in a confidential ERC-7984 token. |
-| Yield distributed via **periodic prize draws** | `fundPrize` receives the yield each round; `draw()` runs once per round window. |
+| Yield distributed via **periodic prize draws** | **Real yield**: `fundVault` routes capital into a confidential Morpho vault; `harvestYield` skims only the earned yield into the pot each round; `draw()` awards it. (A manual `fundPrize` sponsor path also remains.) |
 | **Withdraw principal at any time** (no loss) | `withdraw()` is always allowed and clamps to your balance — your deposit is never at risk. |
 | Winner selection **over encrypted balances** | `ticket = balance × protocol-random`; the winner is the **encrypted argmax**. Odds strictly rise with the deposit; no balance, total or ticket is ever revealed. |
 | **Only winners decrypt** their prize | Each saver receives an encrypted "did I win?" flag `FHE.allow`'d to them alone. |
@@ -142,7 +142,7 @@ design note above. A chi-square goodness-of-fit test against the target law is o
 |---|---|
 | **NdimbalPool.sol** | The pool: confidential deposits, no-loss withdraw, the encrypted weighted draw, winner-only reveal, private solidarity dial, anonymous sponsorship ("Tanti caché"), community fund. |
 | **INdimbalToken.sol** | Minimal ERC-7984 surface (operator transfers take an already-imported `euint64`). |
-| **mocks/MockNdimbalToken.sol** | Test-only confidential token (cUSDT stand-in). |
+| **mocks/MockNdimbalToken.sol** | Test-only confidential token (cUSDC stand-in). |
 
 ## Build, test, deploy
 
@@ -234,7 +234,7 @@ clear v1 rationale:
   budget). To make that *enforced* rather than merely assumed, `fundPrize` **clamps the pot** with `FHE.min`
   to `MAX_PRIZE = 1.8×10¹⁷`, so `c × pct` can never overflow euint64. Any amount funded above the ceiling is
   **refunded to the funder** in the same call (`excess = newPot − capped`, transferred back) — never silently
-  absorbed by the contract. That ceiling is orders of magnitude above any realistic cUSDT prize.
+  absorbed by the contract. That ceiling is orders of magnitude above any realistic cUSDC prize.
 - **The winner is private cryptographically, but not against metadata.** Only the winner is incentivised to
   call the (expensive, O(n)) `claim()`, so an observer of the public transaction history can infer the winner
   with high confidence — the win *flag* itself stays encrypted; the leak is behavioural. (The `claimed`

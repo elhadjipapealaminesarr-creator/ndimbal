@@ -8,7 +8,7 @@ import {IConfidentialVault} from "./IConfidentialVault.sol";
 
 /// @title NDIMBAL — the no-loss prize-savings pool where winning lifts the whole community, privately
 /// @author El Hadji Pape Alamine Sarr (Kaddu) — Zama Developer Program, Mainnet Season 4
-/// @notice A confidential "PoolTogether": savers deposit a confidential token (ERC-7984, e.g. cUSDT),
+/// @notice A confidential "PoolTogether": savers deposit a confidential token (ERC-7984, e.g. cUSDC),
 ///         keep their principal (withdraw at any time — *no loss*), and a periodic draw awards the
 ///         funded prize to one saver. Unique — and only possible with FHE:
 ///
@@ -24,10 +24,11 @@ import {IConfidentialVault} from "./IConfidentialVault.sol";
 ///            donated is public. Turning a lottery into mutual aid ("ndimbal" in Wolof) is impossible
 ///            without confidential preferences.
 ///
-/// @dev    Prize = yield, modelled here as an amount funded per round by a sponsor / yield source
-///         (`fundPrize`); real yield routing (e.g. an ERC-4626 / Morpho vault) plugs into `fundPrize`.
-///         Ticket = `balance(euint64) × randEuint32` fits euint64 for demo-scale balances; widen to
-///         euint128 for very large pools. Target chain: Sepolia.
+/// @dev    Prize = REAL YIELD: `fundVault` routes confidential capital into a yield vault (`IConfidentialVault`
+///         — a Sepolia mock of, or the real mainnet, Steakhouse Confidential Prime USDC vault on Morpho) and
+///         `harvestYield` skims only the earned yield into the pot. A manual `fundPrize` (sponsor path) also
+///         remains. Ticket = `balance(euint64) × randEuint32`, widened to euint128 in the draw for exact
+///         weighting. Target chain: Sepolia.
 contract NdimbalPool is ZamaEthereumConfig {
     INdimbalToken public immutable token; // ERC-7984 confidential settlement token
 
@@ -424,7 +425,7 @@ contract NdimbalPool is ZamaEthereumConfig {
         // 1) community give-back. Kept in euint64 on purpose: widening this path to euint128 pushes claim()
         //    past the fhEVM HCU / circuit-depth budget for one transaction (the O(n) sponsorship loop already
         //    dominates the cost). euint64 is safe for prize amounts up to ~1.8e17 — orders of magnitude above
-        //    any realistic cUSDT prize. This bound is documented as a known limit in the README.
+        //    any realistic cUSDC prize. This bound is documented as a known limit in the README.
         euint64 community = FHE.div(FHE.mul(c, _giveBackAt[r][msg.sender]), uint64(100)); // c × pct / 100
         euint64 net = FHE.sub(c, community);
 

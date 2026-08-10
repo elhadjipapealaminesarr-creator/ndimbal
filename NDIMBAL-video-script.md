@@ -6,7 +6,7 @@
 **Tone:** warm, confident, concrete. Everything on screen is the *live* dApp doing *real* on-chain things — never a mockup.
 
 **Setup before recording**
-- Browser at **https://ndimbal-rho.vercel.app**, MetaMask on **Sepolia**, wallet funded with a little test-ETH + demo cUSDT.
+- Browser at **https://ndimbal-rho.vercel.app**, MetaMask on **Sepolia**, wallet funded with a little test-ETH + demo cUSDC.
 - **Do Mint + Allow pool once before recording** so the live part is fast.
 - **Demo solo (one wallet).** A single depositor *always wins* the round — so your "I won" reveal is deterministic and clean, no retries on camera. (The pool's proven capacity is 3 savers/round; solo is perfect for a tight demo.)
 - Second tab open on the **verified contract** on Etherscan. Activity-log popup ready. Record 1080p, cursor visible, zoom ~110%.
