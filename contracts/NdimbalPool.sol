@@ -551,7 +551,17 @@ contract NdimbalPool is ZamaEthereumConfig {
     ///         give-back % goes to the community fund; your private "Tanti caché" sponsorship routes a
     ///         further share to a member you chose in secret; the rest is yours — all on encrypted
     ///         values, so nobody sees your generosity or who you supported.
-    function claim(uint256 r) external nonReentrant {
+    function claim(uint256 r) external nonReentrant { _claim(r, false); }
+
+    /// @notice Claim, but REINVEST your net winnings into the pool (compound your stake) instead of withdrawing
+    ///         — inspired by Premium Bonds. No loss, it grows your future odds, and adds no new participant.
+    ///         Give-back and "Tanti caché" sponsorship still apply first; you must still be a participant.
+    function claimReinvest(uint256 r) external nonReentrant {
+        require(isParticipant[msg.sender], "not a participant");
+        _claim(r, true);
+    }
+
+    function _claim(uint256 r, bool reinvest) internal {
         // A trivially-encrypted 0 still passes FHE.isInitialized, so zeroing _claimable is NOT enough to
         // block a re-call (which would re-run the O(n) sponsorship loop). This plaintext flag is the real lock.
         require(!claimed[r][msg.sender], "already claimed");
@@ -594,8 +604,18 @@ contract NdimbalPool is ZamaEthereumConfig {
         _claimable[r][msg.sender] = FHE.asEuint64(0); // prevent double-claim
         FHE.allowThis(_claimable[r][msg.sender]);
 
-        FHE.allowTransient(userGets, address(token));
-        token.confidentialTransfer(msg.sender, userGets);
+        if (reinvest) {
+            // Compound the net winnings into the pool: grow the saver's balance; the tokens (already in the
+            // contract as part of the pot) simply stay put — no transfer, no new participant, still no loss.
+            euint64 nb = FHE.add(_bal(msg.sender), userGets);
+            _balance[msg.sender] = nb;
+            FHE.allowThis(nb);
+            FHE.allow(nb, msg.sender);
+            emit Deposited(msg.sender);
+        } else {
+            FHE.allowTransient(userGets, address(token));
+            token.confidentialTransfer(msg.sender, userGets);
+        }
         emit PrizeClaimed(r, msg.sender);
     }
 

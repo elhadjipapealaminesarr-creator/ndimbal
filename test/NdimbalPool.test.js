@@ -323,6 +323,27 @@ describe("NdimbalPool", function () {
     expect(bobBal).to.equal(150n);
   });
 
+  it("lets a winner reinvest their prize into the pool (compound, no loss)", async function () {
+    const [deployer, alice] = await ethers.getSigners();
+    const { token, tokenAddr, pool, poolAddr } = await deployPool();
+    await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
+    await mintAndApprove(token, tokenAddr, poolAddr, alice, 1_000_000);
+    await deposit(pool, poolAddr, alice, 100);
+    await fundPrize(pool, poolAddr, deployer, 1000);
+    await advanceToDraw();
+    await runDraw(pool);
+    // alice takes the grand tier (500) and REINVESTS instead of withdrawing
+    await pool.connect(alice).claimReinvest(0);
+    // her pool balance compounded: 100 deposit + 500 prize = 600
+    const poolBal = await userU64(await pool.confidentialBalanceOf(alice.address), poolAddr, alice);
+    expect(poolBal).to.equal(600n);
+    // her wallet is unchanged (she never withdrew): 1_000_000 - 100 = 999_900
+    const walletBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
+    expect(walletBal).to.equal(999_900n);
+    // and she cannot claim the same round twice
+    await expect(pool.connect(alice).claim(0)).to.be.revertedWith("already claimed");
+  });
+
   it("keeps working across several consecutive rounds", async function () {
     const { pool, poolAddr, deployer, alice, bob, carol } = await standard();
     for (let r = 0; r < 3; r++) {
