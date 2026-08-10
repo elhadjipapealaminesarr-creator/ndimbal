@@ -21,7 +21,7 @@ async function main() {
 
   const ROUND = 600; // 10-min rounds — 8-min deposit window, no timing stress for a live demo
   const LOCK = 120;  // deposits lock 2 min before the draw
-  const MAX = 3;  // HCU-proven cap: draw() reverts at 4 (HCUTransactionDepthLimitExceeded) — see test/capacity-32.test.js    // max active participants (anti-DoS cap)
+  const MAX = 32;  // batched draw (drawTickets/drawWinners) scales to 32 — see test/capacity-32.test.js
   // Confidential yield vault — Sepolia mock of the Steakhouse Confidential Prime USDC vault (Morpho).
   // In production, pass the real mainnet vault address instead (cUSDC 0xe978…72B2).
   const Vault = await hre.ethers.getContractFactory("MockConfidentialVault");

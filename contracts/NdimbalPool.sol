@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {FHE, euint32, euint64, euint128, ebool, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, euint16, euint64, ebool, externalEuint64} from "@fhevm/solidity/lib/FHE.sol";
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {INdimbalToken} from "./INdimbalToken.sol";
 import {IConfidentialVault} from "./IConfidentialVault.sol";
@@ -27,8 +27,9 @@ import {IConfidentialVault} from "./IConfidentialVault.sol";
 /// @dev    Prize = REAL YIELD: `fundVault` routes confidential capital into a yield vault (`IConfidentialVault`
 ///         — a Sepolia mock of, or the real mainnet, Steakhouse Confidential Prime USDC vault on Morpho) and
 ///         `harvestYield` skims only the earned yield into the pot. A manual `fundPrize` (sponsor path) also
-///         remains. Ticket = `balance(euint64) × randEuint32`, widened to euint128 in the draw for exact
-///         weighting. Target chain: Sepolia.
+///         remains. Ticket = `min(balance, 2^39) × randEuint16` kept in **euint64**; the winner is the
+///         encrypted argmax found by a **tree reduction** (O(log n) depth), so the pool scales past a linear
+///         fold's per-transaction HCU limit. Target chain: Sepolia.
 contract NdimbalPool is ZamaEthereumConfig {
     INdimbalToken public immutable token; // ERC-7984 confidential settlement token
 
@@ -69,6 +70,16 @@ contract NdimbalPool is ZamaEthereumConfig {
 
     mapping(uint256 => bool) public drawn;                        // one draw per round
     mapping(uint256 => address[]) private _participantsAt;        // participant list frozen at draw time (per round)
+    // BATCHED draw (scales the pool past the per-tx HCU limit): the draw is processed in small batches spread
+    // over several transactions — `drawTickets(batch)` computes tickets + a running max, then
+    // `drawWinners(batch)` computes win flags + a running "anyone won?". Each tx stays under the fhEVM HCU
+    // budget, so `MAX_PARTICIPANTS` can be far larger than a single-tx draw allows.
+    mapping(uint256 => euint64[]) private _ticketsAt; // tickets accumulated by drawTickets, read by drawWinners
+    mapping(uint256 => euint64) private _maxAt;       // running encrypted max ticket
+    mapping(uint256 => ebool) private _anyWonAt;      // running "did anyone win?" (for the rollover)
+    mapping(uint256 => uint256) public ticketDone;    // participants whose tickets are computed
+    mapping(uint256 => uint256) public winDone;       // participants whose win flag is computed
+    mapping(uint256 => uint8) public drawPhase;       // 0 = none, 1 = ticketing, 2 = tickets done, 3 = drawn
     mapping(uint256 => mapping(address => ebool)) private _won;   // round => saver => encrypted win flag
     mapping(uint256 => mapping(address => euint64)) private _claimable;
     mapping(uint256 => mapping(address => bool)) private claimed; // one claim per saver per round; private so it leaks no "who claimed" metadata
@@ -92,6 +103,7 @@ contract NdimbalPool is ZamaEthereumConfig {
     event Withdrawn(address indexed saver);
     event GiveBackSet(address indexed saver);
     event PrizeFunded(address indexed from);
+    event DrawStarted(uint256 indexed round, uint256 participantCount); // drawPart1 completed
     event DrawExecuted(uint256 indexed round, uint256 participantCount);
     event PrizeClaimed(uint256 indexed round, address indexed claimant);
     event CommunityFundSwept(address indexed to);
@@ -320,6 +332,32 @@ contract NdimbalPool is ZamaEthereumConfig {
     }
 
     // ------------------------------------------------------------------ the draw
+    // Pairwise TREE reductions: fold an array with FHE.max / FHE.or in ceil(log2(n)) sequential levels
+    // instead of n. The fhEVM caps the *sequential depth* of FHE ops per transaction
+    // (HCUTransactionDepthLimitExceeded); a linear fold's depth grows with n and caps the pool at ~3, while a
+    // tree's depth grows with log2(n), letting the same op count fit far larger pools. Results are identical
+    // (max and or are associative). Both helpers overwrite the passed array in place.
+    function _maxTree(euint64[] memory a, uint256 len) internal returns (euint64) {
+        while (len > 1) {
+            uint256 half = (len + 1) / 2;
+            for (uint256 i = 0; i < half; i++) {
+                a[i] = (2 * i + 1 < len) ? FHE.max(a[2 * i], a[2 * i + 1]) : a[2 * i];
+            }
+            len = half;
+        }
+        return a[0];
+    }
+    function _orTree(ebool[] memory a, uint256 len) internal returns (ebool) {
+        while (len > 1) {
+            uint256 half = (len + 1) / 2;
+            for (uint256 i = 0; i < half; i++) {
+                a[i] = (2 * i + 1 < len) ? FHE.or(a[2 * i], a[2 * i + 1]) : a[2 * i];
+            }
+            len = half;
+        }
+        return a[0];
+    }
+
     /// @notice Execute the periodic draw. Winner = encrypted argmax of `balance × protocol-random`.
     ///         Total pool, every balance and every ticket stay encrypted; each saver gets an encrypted
     ///         flag only they can decrypt. Randomness is protocol-provided (unbiasable, un-grindable).
@@ -346,27 +384,37 @@ contract NdimbalPool is ZamaEthereumConfig {
         // frozen "Tanti caché" index would credit whoever got swapped into that slot (see claim()).
         _participantsAt[r] = participants;
 
-        // Ticket math is done in euint128: balance(euint64) × rand(euint32) can reach ~2^96,
-        // which would overflow euint64. Widening to euint128 keeps the weighting exact even for
-        // very large cumulative pools. Balances/prize/fund stay euint64 (ample for real amounts).
-        euint128[] memory tickets = new euint128[](n);
-        euint128 maxTicket = FHE.asEuint128(0);
+        // Tickets are euint64 (roughly half the HCU of euint128, so many more savers fit under the fhEVM's
+        // per-transaction HCU budget). To stay inside 64 bits we cap the effective balance and use a 16-bit
+        // random: ticket = min(balance, 2^39) × rand(2^16) ≤ 2^55, then (<< 8 | index) ≤ 2^63 — no overflow,
+        // still strictly weighted by deposit. The cap (~5.5×10^11 base units) is far above any realistic prize
+        // pool; a saver above it is simply weighted as if at the cap. Documented in the README.
+        euint64[] memory tickets = new euint64[](n);
+        euint64 balCap = FHE.asEuint64(uint64(1) << 39);
 
-        // pass 1: weighted encrypted tickets + running encrypted max
+        // pass 1: weighted encrypted tickets — each INDEPENDENT (no sequential running max, so pass-1 depth
+        // no longer grows with n).
         for (uint256 i = 0; i < n; i++) {
-            euint32 rnd = FHE.randEuint32();                                            // protocol randomness
-            // Strictly-unique ticket: (balance × random) shifted up 8 bits, with the public loop index in the
-            // low bits. Two non-zero tickets can then NEVER be exactly equal — which would otherwise make two
-            // savers "win" the same round and let each claim the full pot (breaking the no-loss guarantee).
-            // (balance 2^64 × rand 2^32 ≈ 2^96, << 8 ≈ 2^104, + index < 2^8 — well within euint128.)
-            euint128 t = FHE.mul(FHE.asEuint128(_bal(participants[i])), FHE.asEuint128(rnd)); // balance × random
-            t = FHE.add(FHE.mul(t, FHE.asEuint128(256)), FHE.asEuint128(uint128(n - i)));     // (t << 8) | (n - i)
+            euint16 rnd = FHE.randEuint16();                                            // protocol randomness
+            // Strictly-unique ticket: (cappedBalance × random) shifted up 8 bits, with the public loop index in
+            // the low bits, so two non-zero tickets can NEVER be exactly equal — which would otherwise let two
+            // savers "win" the same round and each claim the full pot (breaking the no-loss guarantee).
+            euint64 t = FHE.mul(FHE.min(_bal(participants[i]), balCap), FHE.asEuint64(rnd)); // ≤ 2^55
+            t = FHE.add(FHE.mul(t, FHE.asEuint64(256)), FHE.asEuint64(uint64(n - i)));       // (t << 8) | (n - i)
             tickets[i] = t;
-            maxTicket = FHE.max(maxTicket, t);
+        }
+        // encrypted max via a TREE reduction (log2(n) sequential depth). Reduce a COPY so tickets[] stays
+        // intact for the win-flag comparison in pass 2.
+        euint64 maxTicket;
+        {
+            euint64[] memory work = new euint64[](n);
+            for (uint256 i = 0; i < n; i++) work[i] = tickets[i];
+            maxTicket = _maxTree(work, n);
         }
 
-        // pass 2: encrypted win flag + claimable prize (full pot to the winner)
-        ebool anyWon = FHE.asEbool(false); // encrypted "did anyone win this round?"
+        // pass 2: encrypted win flag + claimable prize (full pot to the winner). Flags are collected into an
+        // array and OR-reduced by a tree afterwards, so pass-2 depth no longer grows with n either.
+        ebool[] memory wonArr = new ebool[](n);
         for (uint256 i = 0; i < n; i++) {
             address p = participants[i];
             // Guard: a saver with a zero balance (deposited then withdrew everything, but still
@@ -378,7 +426,7 @@ contract NdimbalPool is ZamaEthereumConfig {
                 FHE.eq(tickets[i], maxTicket),
                 FHE.gt(_bal(p), FHE.asEuint64(0))
             );
-            anyWon = FHE.or(anyWon, won);
+            wonArr[i] = won;
             euint64 c = FHE.select(won, _prizePot, FHE.asEuint64(0));
             _won[r][p] = won;
             _claimable[r][p] = c;
@@ -399,6 +447,9 @@ contract NdimbalPool is ZamaEthereumConfig {
             FHE.allowThis(sp);
         }
 
+        // OR-reduce the win flags with a tree (log2(n) depth) → "did anyone win this round?"
+        ebool anyWon = _orTree(wonArr, n);
+
         round = r + 1;
         roundStart = uint64(block.timestamp);
         // Roll the prize over: only zero the pot if someone actually won; otherwise it carries to next round
@@ -406,6 +457,102 @@ contract NdimbalPool is ZamaEthereumConfig {
         _prizePot = FHE.select(anyWon, FHE.asEuint64(0), _prizePot);
         FHE.allowThis(_prizePot);
         emit DrawExecuted(r, n);
+    }
+
+    // ------------------------------------------- BATCHED draw (scales the pool past the single-tx HCU limit)
+    /// @notice Phase 1, batched: compute the encrypted tickets for the next `batch` savers and fold them into a
+    ///         running max. Call repeatedly (any batch that fits a tx — e.g. 8) until `drawPhase == 2`, then run
+    ///         `drawWinners`. The first call freezes the round; an empty pool finishes here.
+    function drawTickets(uint256 batch) external {
+        uint256 r = round;
+        uint256 n = participants.length;
+        if (drawPhase[r] == 0) {
+            require(block.timestamp >= roundStart + roundDuration, "round not over");
+            if (n == 0) { // empty round: finish immediately and advance the clock
+                drawPhase[r] = 3;
+                drawn[r] = true;
+                round = r + 1;
+                roundStart = uint64(block.timestamp);
+                emit DrawExecuted(r, 0);
+                return;
+            }
+            _participantsAt[r] = participants; // freeze the participant list for the whole draw
+            drawPhase[r] = 1;
+        }
+        require(drawPhase[r] == 1, "not in ticketing phase");
+        require(batch > 0, "batch=0");
+        uint256 done = ticketDone[r];
+        uint256 end = done + batch;
+        if (end > n) end = n;
+        euint64 balCap = FHE.asEuint64(uint64(1) << 39);
+        euint64[] memory bt = new euint64[](end - done);
+        for (uint256 i = done; i < end; i++) {
+            euint16 rnd = FHE.randEuint16();
+            euint64 t = FHE.mul(FHE.min(_bal(participants[i]), balCap), FHE.asEuint64(rnd));
+            t = FHE.add(FHE.mul(t, FHE.asEuint64(256)), FHE.asEuint64(uint64(n - i)));
+            FHE.allowThis(t); // persist ACL so drawWinners (a later tx) can compare it to the max
+            _ticketsAt[r].push(t);
+            bt[i - done] = t;
+        }
+        // batch-local max (tree, log2(batch) depth) folded into the running global max
+        euint64 batchMax = _maxTree(bt, end - done);
+        _maxAt[r] = (done == 0) ? batchMax : FHE.max(_maxAt[r], batchMax);
+        FHE.allowThis(_maxAt[r]);
+        ticketDone[r] = end;
+        if (end == n) drawPhase[r] = 2; // all tickets done → ready for the winner phase
+        emit DrawStarted(r, end);
+    }
+
+    /// @notice Phase 2, batched: for the next `batch` savers, compute the encrypted win flag + claimable prize,
+    ///         snapshot generosity, and fold into a running "did anyone win?". Call repeatedly until all savers
+    ///         are processed; the final call rolls the prize over (if nobody won) and advances the round.
+    function drawWinners(uint256 batch) external {
+        uint256 r = round;
+        require(drawPhase[r] == 2, "tickets not done");
+        require(batch > 0, "batch=0");
+        address[] storage plist = _participantsAt[r];
+        uint256 n = plist.length;
+        euint64 maxTicket = _maxAt[r];
+        uint256 done = winDone[r];
+        uint256 end = done + batch;
+        if (end > n) end = n;
+        ebool[] memory bw = new ebool[](end - done);
+        for (uint256 i = done; i < end; i++) {
+            address p = plist[i];
+            // zero-balance guard: an emptied account can never win (see the single-tx draw for the rationale).
+            ebool won = FHE.and(FHE.eq(_ticketsAt[r][i], maxTicket), FHE.gt(_bal(p), FHE.asEuint64(0)));
+            bw[i - done] = won;
+            euint64 c = FHE.select(won, _prizePot, FHE.asEuint64(0));
+            _won[r][p] = won;
+            _claimable[r][p] = c;
+            FHE.allowThis(won);
+            FHE.allow(won, p);
+            FHE.allowThis(c);
+            FHE.allow(c, p);
+            // freeze the generosity choices for this round (anti front-running)
+            euint64 gb = _pct(p);
+            euint64 si = _sIdx(p);
+            euint64 sp = _sPct(p);
+            _giveBackAt[r][p] = gb;
+            _sIdxAt[r][p] = si;
+            _sPctAt[r][p] = sp;
+            FHE.allowThis(gb);
+            FHE.allowThis(si);
+            FHE.allowThis(sp);
+        }
+        ebool batchAny = _orTree(bw, end - done);
+        _anyWonAt[r] = (done == 0) ? batchAny : FHE.or(_anyWonAt[r], batchAny);
+        FHE.allowThis(_anyWonAt[r]);
+        winDone[r] = end;
+        if (end == n) { // last batch → finalise the round
+            round = r + 1;
+            roundStart = uint64(block.timestamp);
+            drawn[r] = true;
+            drawPhase[r] = 3;
+            _prizePot = FHE.select(_anyWonAt[r], FHE.asEuint64(0), _prizePot);
+            FHE.allowThis(_prizePot);
+            emit DrawExecuted(r, n);
+        }
     }
 
     /// @notice Claim your prize for round `r`. If you didn't win, this moves 0 (harmless). Your private

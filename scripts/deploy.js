@@ -18,10 +18,10 @@ async function main() {
   const tokenAddr = await token.getAddress();
   console.log("MockNdimbalToken:", tokenAddr);
 
-  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe), 3-participant cap (HCU-proven).
+  // 2) NDIMBAL pool — 1-day rounds, deposits lock 1h before the draw (anti-snipe), up to 32-participant cap (batched draw).
   const DAY = 24 * 3600;
   const LOCK = 3600;
-  const MAX = 3;  // PROVEN safe cap: draw() reverts at 4 (HCUTransactionDepthLimitExceeded) — see test/capacity-32.test.js
+  const MAX = 32;  // batched draw (drawTickets/drawWinners) scales to 32 — see test/capacity-32.test.js
   // Confidential yield vault — Sepolia mock of the Steakhouse Confidential Prime USDC vault (Morpho).
   // In production, pass the real mainnet vault address instead (cUSDC 0xe978…72B2).
   const Vault = await hre.ethers.getContractFactory("MockConfidentialVault");

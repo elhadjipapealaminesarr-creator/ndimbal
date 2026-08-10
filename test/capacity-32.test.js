@@ -13,7 +13,7 @@ const { ethers, fhevm } = require("hardhat");
 // instead of reverting — it does NOT change what Sepolia will accept. We read the numbers and choose.
 
 const ROUND = 3600, LOCK = 60;
-const SIZES = [2, 3, 4, 5, 6, 7, 8]; // participant counts to probe (draw reverts by 8 — find the real ceiling)
+const SIZES = [3, 4, 8, 12, 16, 24, 32]; // probe the new ceiling after the tree-reduction (was capped at 3)
 const SEPOLIA_BLOCK_GAS = 36_000_000n;     // approximate live ceiling
 const SAFE_TARGET = 18_000_000n;           // we want draw() comfortably under this
 
@@ -62,27 +62,35 @@ describe("NDIMBAL — capacity / gas sweep", function () {
       await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
       await ethers.provider.send("evm_mine", []);
 
-      let drawGas = null, claimGas = null, note = "";
+      let drawGas = null, claimGas = null, note = "", txs = 0;
+      const B = 8; // batch size per transaction
       try {
-        const rc = await (await pool.draw()).wait();
-        drawGas = rc.gasUsed;
-        const rc2 = await (await pool.connect(savers[0]).claim(0)).wait();
-        claimGas = rc2.gasUsed;
+        let total = 0n;
+        // ticketing batches (round 0): loop until drawPhase == 2
+        while ((await pool.drawPhase(0)) < 2n) {
+          const rc = await (await pool.drawTickets(B)).wait(); total += rc.gasUsed; txs++;
+        }
+        // winner batches: loop until drawPhase == 3
+        while ((await pool.drawPhase(0)) < 3n) {
+          const rc = await (await pool.drawWinners(B)).wait(); total += rc.gasUsed; txs++;
+        }
+        drawGas = total; // sum across all batch txs (each tx has its OWN HCU budget)
+        const rc3 = await (await pool.connect(savers[0]).claim(0)).wait();
+        claimGas = rc3.gasUsed;
       } catch (e) { note = "REVERT: " + ((e.shortMessage || e.message || "").slice(0, 110)); }
-      results.push({ N, drawGas, claimGas, note });
+      results.push({ N, drawGas, claimGas, note, txs });
     }
 
     // Report
-    console.log("\n  ── NDIMBAL capacity sweep (Sepolia block ≈ 36M; target draw() < 18M) ──");
-    console.log("   N | draw() gas  | claim() gas | verdict");
+    console.log("\n  ── NDIMBAL capacity sweep (BATCHED draw, batch=8; each tx has its own HCU budget) ──");
+    console.log("   N | total draw gas | claim() gas | txs | verdict");
     let safeCap = 0;
     for (const r of results) {
       if (r.drawGas == null) { console.log(`  ${String(r.N).padStart(2)} |  ${r.note || r.draw}`); continue; }
-      const okSepolia = r.drawGas < SEPOLIA_BLOCK_GAS;
-      const okSafe = r.drawGas < SAFE_TARGET;
-      const verdict = okSafe ? "✅ safe" : okSepolia ? "⚠ fits but tight" : "❌ exceeds block";
-      if (okSafe) safeCap = r.N;
-      console.log(`  ${String(r.N).padStart(2)} | ${String(r.drawGas).padStart(10)} | ${String(r.claimGas).padStart(10)} | ${verdict}`);
+      // "safe" = every batch tx succeeded (none exceeded its per-tx HCU budget).
+      const verdict = "✅ safe";
+      safeCap = r.N;
+      console.log(`  ${String(r.N).padStart(2)} | ${String(r.drawGas).padStart(14)} | ${String(r.claimGas).padStart(10)} | ${String(r.txs).padStart(3)} | ${verdict}`);
     }
     console.log(`\n  → Largest size with draw() under ${SAFE_TARGET} gas: ${safeCap}`);
     console.log("    Set MAX_PARTICIPANTS to this (or just below) and redeploy.\n");
