@@ -70,7 +70,7 @@ opening seconds; land the second as the "this is a product, not a demo" beat.
 ## Links (video description)
 - Live dApp: https://ndimbal-rho.vercel.app
 - Repo: https://github.com/elhadjipapealaminesarr-creator/ndimbal
-- Verified contract (pool): https://sepolia.etherscan.io/address/0xD31Ff0080dcC6fabfBc496ec403A70c0BFd22A12
+- Verified contract (pool): https://sepolia.etherscan.io/address/0xF23D0c33c76266484087C3805b54a8Ca5d9F6960
 - Confidential yield vault: https://sepolia.etherscan.io/address/0x4D22EC727D7Ab715531BBEfc55BFEA3BdAF250C7
 
 ---
