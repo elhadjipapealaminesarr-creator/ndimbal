@@ -15,3 +15,13 @@ no balance, pool total or ticket is ever revealed.
 | _first automated run will appear here_ | 200 | — | seeded on first schedule/dispatch | — |
 | 2026-08-04T14:02:25Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/30916755267) |
 | 2026-08-05T02:06:52Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/30968356222) |
+| 2026-08-05T13:59:48Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31012852394) |
+| 2026-08-06T02:10:30Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31064808556) |
+| 2026-08-06T13:57:43Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31108353821) |
+| 2026-08-07T02:29:00Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31141296978) |
+| 2026-08-07T12:54:50Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31180166384) |
+| 2026-08-08T01:16:25Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31232214887) |
+| 2026-08-08T12:39:17Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31257696125) |
+| 2026-08-09T01:21:35Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31288079563) |
+| 2026-08-09T12:41:19Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31313873361) |
+| 2026-08-10T01:23:10Z | 200 | success | PASS — exactly one winner every round; bigger deposit won more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/31346903057) |
