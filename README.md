@@ -245,9 +245,9 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x8d3c8d1e5BB610fAc29dA026dA0759b0d5fB7AEb`](https://sepolia.etherscan.io/address/0x8d3c8d1e5BB610fAc29dA026dA0759b0d5fB7AEb#code) | Powers the hosted dApp · all audit fixes (leave() purge, no-deadlock, snapshot at draw, unique tickets, prize cap + refund + rollover, double-claim lock, zero-balance guard, **immutable community beneficiary — no admin key**) · **real-yield loop** (`fundVault`/`harvestYield`) · **batched draw — up to 32 savers/round** · 10-min rounds |
-| **MockConfidentialVault** (yield source) | [`0x214D33a7dC7E3b8Bf9a76cf6F0CCDA0373A3ae49`](https://sepolia.etherscan.io/address/0x214D33a7dC7E3b8Bf9a76cf6F0CCDA0373A3ae49) | Sepolia stand-in for the Steakhouse Confidential Prime USDC vault on Morpho; production points at the real mainnet vault via the same interface |
-| Confidential token (demo cUSDC) | [`0x6AFA34EC415217216331335755C70728a07D18a4`](https://sepolia.etherscan.io/address/0x6AFA34EC415217216331335755C70728a07D18a4) | ERC-7984 stand-in for the pool above |
+| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x98d67df5Bf5aD5c4D813d2892eB20613b322fed4`](https://sepolia.etherscan.io/address/0x98d67df5Bf5aD5c4D813d2892eB20613b322fed4#code) | Powers the hosted dApp · all audit fixes · **real-yield loop** (`fundVault`/`harvestYield`) · **batched draw — up to 32 savers/round** · **top-3 tiered prizes 50/30/20** (PoolTogether-style) · **`claimReinvest` (compound)** · immutable community beneficiary — no admin key |
+| **MockConfidentialVault** (yield source) | [`0x6681DE864eF01c935A58E6c05208D050a27eC153`](https://sepolia.etherscan.io/address/0x6681DE864eF01c935A58E6c05208D050a27eC153) | Sepolia stand-in for the Steakhouse Confidential Prime USDC vault on Morpho; production points at the real mainnet vault via the same interface |
+| Confidential token (demo cUSDC) | [`0x1D16Db6f9e7044033d391F280fACd4993fF9DA02`](https://sepolia.etherscan.io/address/0x1D16Db6f9e7044033d391F280fACd4993fF9DA02) | ERC-7984 stand-in for the pool above |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
