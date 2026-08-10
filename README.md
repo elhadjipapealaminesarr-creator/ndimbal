@@ -245,8 +245,9 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (live · audit-hardened · source-verified) | [`0xf507fAe5cF86C17A085E84C21ba15a42776d5103`](https://sepolia.etherscan.io/address/0xf507fAe5cF86C17A085E84C21ba15a42776d5103#code) | Powers the hosted dApp · all audit fixes (leave() purge, empty-round advance / no deadlock, participant snapshot at draw, unique tickets, prize cap + excess refund + rollover, double-claim lock, zero-balance guard, **immutable community beneficiary — no admin key**) · **HCU-proven cap = 3** · 10-min rounds for a fully playable draw |
-| Confidential token (demo cUSDT) | [`0xbE4d632D7378AC0821213e3e01ab2c07f5554E23`](https://sepolia.etherscan.io/address/0xbE4d632D7378AC0821213e3e01ab2c07f5554E23) | ERC-7984 stand-in for the pool above |
+| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x0c3f8d846923f814569DF71276110c2Efa5390EF`](https://sepolia.etherscan.io/address/0x0c3f8d846923f814569DF71276110c2Efa5390EF#code) | Powers the hosted dApp · all audit fixes (leave() purge, no-deadlock, snapshot at draw, unique tickets, prize cap + refund + rollover, double-claim lock, zero-balance guard, **immutable community beneficiary — no admin key**) · **real-yield loop** (`fundVault`/`harvestYield`) · **HCU-proven cap = 3** · 10-min rounds |
+| **MockConfidentialVault** (yield source) | [`0x1B088Db46abE2993FA16d93195f5d4B54136B1cD`](https://sepolia.etherscan.io/address/0x1B088Db46abE2993FA16d93195f5d4B54136B1cD) | Sepolia stand-in for the Steakhouse Confidential Prime USDC vault on Morpho; production points at the real mainnet vault via the same interface |
+| Confidential token (demo cUSDC) | [`0xEAcc7E03F02a90DE0406b8Df8CF3d33D19Cdd5b8`](https://sepolia.etherscan.io/address/0xEAcc7E03F02a90DE0406b8Df8CF3d33D19Cdd5b8) | ERC-7984 stand-in for the pool above |
 
 Deployer: [`0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2`](https://sepolia.etherscan.io/address/0x012d7E6280fF0A77f46E5a4155C614e8dF68E7A2).
 
