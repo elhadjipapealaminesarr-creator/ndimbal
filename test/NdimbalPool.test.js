@@ -5,10 +5,9 @@ const { FhevmType } = require("@fhevm/hardhat-plugin");
 // NDIMBAL — confidential no-loss prize-savings pool. Runs on the fhEVM Hardhat mock.
 //   npx hardhat test test/NdimbalPool.test.js
 //
-// This suite goes well beyond a happy-path check: it covers the draw, no-loss withdrawal,
-// the private give-back split, deposit-lock (anti-snipe) behaviour, one-draw-per-round,
-// empty/edge pools, and access control (a third party can never decrypt someone else's
-// win flag or balance). Statistical fairness over many rounds lives in verify-draw.test.js.
+// The draw awards the TOP-3 tickets a tiered prize (1st = 50%, 2nd = 30%, 3rd = 20% of the pot), like
+// PoolTogether's descending prizes. It runs in batches across 4 phases (tickets → 2nd max → 3rd max →
+// winners); `runDraw()` below drives the whole thing. Statistical fairness lives in verify-draw.test.js.
 const ROUND = 3600; // 1h rounds
 const LOCK = 60; // no new deposits in the final 60s before a draw (anti-snipe)
 
@@ -50,6 +49,14 @@ async function advanceToDraw() {
   await ethers.provider.send("evm_increaseTime", [ROUND + 1]);
   await ethers.provider.send("evm_mine", []);
 }
+// Drive the whole batched top-3 draw for the current round (all 4 phases, batch of 8). Handles empty rounds.
+async function runDraw(pool, batch = 8) {
+  const r = await pool.round();
+  while ((await pool.drawPhase(r)) < 2n) await pool.drawTickets(batch);
+  while ((await pool.drawPhase(r)) < 3n) await pool.drawMax2(batch);
+  while ((await pool.drawPhase(r)) < 4n) await pool.drawMax3(batch);
+  while ((await pool.drawPhase(r)) < 5n) await pool.drawWinners(batch);
+}
 async function deployPool(maxParticipants = 32, beneficiary) {
   const token = await (await ethers.getContractFactory("MockNdimbalToken")).deploy();
   await token.waitForDeployment();
@@ -69,6 +76,11 @@ async function standard() {
   await fundPrize(pool, poolAddr, deployer, 1000);
   return { token, tokenAddr, pool, poolAddr, deployer, alice, bob, carol };
 }
+async function countWinners(pool, poolAddr, r, savers) {
+  let n = 0;
+  for (const w of savers) if (await userBool(await pool.didWin(r, w.address), poolAddr, w)) n++;
+  return n;
+}
 const userBool = (h, addr, s) => fhevm.userDecryptEbool(h, addr, s);
 const userU64 = (h, addr, s) => fhevm.userDecryptEuint(FhevmType.euint64, h, addr, s);
 async function decryptFails(fn) {
@@ -79,95 +91,69 @@ describe("NdimbalPool", function () {
   this.timeout(0);
 
   // ----------------------------------------------------------- happy path
-  it("runs a fully confidential draw with exactly one winner", async function () {
+  it("runs a fully confidential top-3 draw (three winners among three savers)", async function () {
     const { pool, poolAddr, alice, bob, carol } = await standard();
     await advanceToDraw();
-    await pool.draw();
-
-    let winners = 0;
-    for (const who of [alice, bob, carol]) {
-      const won = await userBool(await pool.didWin(0, who.address), poolAddr, who);
-      if (won) winners++;
-    }
-    expect(winners).to.equal(1);
+    await runDraw(pool);
+    expect(await countWinners(pool, poolAddr, 0, [alice, bob, carol])).to.equal(3); // top-3 of 3 = all win a tier
   });
 
-  // ---- zero-balance guard (regression test for the multiple-winner bug) ----
-  // If everyone withdraws before the draw but a prize is funded, every ticket == 0 == maxTicket.
-  // Without the `balance > 0` guard in draw(), FHE.eq(ticket, maxTicket) is true for ALL of them
-  // and each could claim the full pot. The guard must make this yield ZERO winners (prize rolls over).
+  // ---- zero-balance guard: no positive balance => no winner, prize rolls over ----
   it("nobody wins when the whole pool is at zero and a prize is funded", async function () {
     const { pool, poolAddr, alice, bob, carol } = await standard();
     await withdraw(pool, poolAddr, alice, 100);
     await withdraw(pool, poolAddr, bob, 300);
     await withdraw(pool, poolAddr, carol, 600); // all three now at a zero balance
     await advanceToDraw();
-    await pool.draw();
-
-    let winners = 0;
-    for (const who of [alice, bob, carol]) {
-      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
-    }
-    expect(winners).to.equal(0); // guard holds: no zero-balance winner; the prize rolls over
+    await runDraw(pool);
+    expect(await countWinners(pool, poolAddr, 0, [alice, bob, carol])).to.equal(0); // guard holds; prize rolls over
   });
 
-  it("still has exactly one winner when several savers are tied at a zero balance", async function () {
+  it("only positive-balance savers can win (one winner when two are at zero)", async function () {
     const { pool, poolAddr, alice, bob, carol } = await standard();
     await withdraw(pool, poolAddr, alice, 100);
     await withdraw(pool, poolAddr, bob, 300); // alice & bob at zero; carol keeps 600
     await advanceToDraw();
-    await pool.draw();
-
-    let winners = 0;
-    for (const who of [alice, bob, carol]) {
-      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
-    }
-    expect(winners).to.equal(1); // carol; the two zero-balance savers can never tie-win
+    await runDraw(pool);
+    expect(await countWinners(pool, poolAddr, 0, [alice, bob, carol])).to.equal(1); // carol only; empty tiers roll over
   });
 
-  // ---- ticket uniqueness (NDM-M-01): equal balances must still yield ONE winner ----
-  // The riskiest tie case: three savers with the SAME positive balance. balance × random can collide,
-  // so the ticket carries the public loop index in its low 8 bits to break exact ties. This asserts the
-  // uniqueness law directly — without it, two "argmax" savers could each claim the full pot.
-  it("produces exactly one winner even when all balances are equal (NDM-M-01)", async function () {
+  // ---- ticket uniqueness (NDM-M-01): equal balances still give DISTINCT winners (no double-tier) ----
+  it("produces three distinct winners even when all balances are equal (NDM-M-01)", async function () {
     const [deployer, alice, bob, carol] = await ethers.getSigners();
     const { token, tokenAddr, pool, poolAddr } = await deployPool();
     for (const w of [deployer, alice, bob, carol]) await mintAndApprove(token, tokenAddr, poolAddr, w, 1_000_000);
     for (const w of [alice, bob, carol]) await deposit(pool, poolAddr, w, 500); // identical balances
     await fundPrize(pool, poolAddr, deployer, 1000);
     await advanceToDraw();
-    await pool.draw();
-
-    let winners = 0;
-    for (const who of [alice, bob, carol]) {
-      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
-    }
-    expect(winners).to.equal(1); // tie-breaker index guarantees a unique argmax
+    await runDraw(pool);
+    expect(await countWinners(pool, poolAddr, 0, [alice, bob, carol])).to.equal(3); // unique tickets -> 3 distinct winners
   });
 
   // ---- audit fixes ----
   it("blocks a second claim() for the same round (NDM-M-03)", async function () {
-    const { pool, poolAddr, alice } = await standard();
+    const { pool, alice } = await standard();
     await advanceToDraw();
-    await pool.draw();
-    await pool.connect(alice).claim(0);                       // first claim ok (moves 0 if she lost)
+    await runDraw(pool);
+    await pool.connect(alice).claim(0);
     await expect(pool.connect(alice).claim(0)).to.be.revertedWith("already claimed");
   });
 
-  it("rolls the prize over to the next round when nobody wins (NDM-H-02)", async function () {
+  it("rolls unfilled tiers over to the next round (NDM-H-02)", async function () {
     const { pool, poolAddr, alice, bob, carol } = await standard(); // prize = 1000
-    // round 0: everyone withdraws -> all balances zero -> nobody wins -> prize must roll over (not burn)
+    // round 0: everyone withdraws -> all zero -> nobody wins -> the whole 1000 rolls over
     await withdraw(pool, poolAddr, alice, 100);
     await withdraw(pool, poolAddr, bob, 300);
     await withdraw(pool, poolAddr, carol, 600);
     await advanceToDraw();
-    await pool.draw();
-    // round 1: only alice deposits -> sole positive balance -> she wins the rolled-over prize
+    await runDraw(pool);
+    // round 1: only alice deposits -> she takes the grand tier (50% of the rolled-over 1000 = 500);
+    // the 30%/20% tiers are unfilled and roll over again.
     await deposit(pool, poolAddr, alice, 50);
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     const claimable = await userU64(await pool.claimableOf(1, alice.address), poolAddr, alice);
-    expect(claimable).to.equal(1000n); // the 1000 prize survived round 0 and is claimable in round 1
+    expect(claimable).to.equal(500n); // grand tier of the surviving 1000 pot
   });
 
   it("caps the participant count so the list can't be inflated (NDM-H-01)", async function () {
@@ -190,34 +176,28 @@ describe("NdimbalPool", function () {
   });
 
   it("has no admin key — the community fund can only reach the immutable beneficiary (NDM-M-05)", async function () {
-    const [deployer, alice, bob] = await ethers.getSigners();
+    const [, alice, bob] = await ethers.getSigners();
     const { pool } = await deployPool(32, bob.address); // beneficiary fixed at deploy
     expect(await pool.communityBeneficiary()).to.equal(bob.address); // public + immutable, no setter exists
-    // sweep is permissionless (there is no admin) — a random account may trigger it, but the destination
-    // is not a choice, so funds can never be diverted. This must NOT revert for a non-deployer caller.
-    await expect(pool.connect(alice).sweepCommunityFund()).to.not.be.reverted;
+    await expect(pool.connect(alice).sweepCommunityFund()).to.not.be.reverted; // permissionless, no admin
   });
 
   it("caps the prize at MAX_PRIZE and refunds the excess to the funder (fundPrize)", async function () {
-    // A single fund ABOVE the cap must clamp the pot to MAX_PRIZE and REFUND the surplus — never silently
-    // absorb it. (The clamp is applied to the incoming amount BEFORE the add, so `_prizePot + got` can never
-    // wrap euint64; the deeper wrap can't even be reached on a sane token, whose own balance would overflow
-    // first — that separate token-supply limit is documented as M-06.)
     const [deployer, alice] = await ethers.getSigners();
     const { token, tokenAddr, pool, poolAddr } = await deployPool();
     const MAX_PRIZE = 180_000_000_000_000_000n;        // 1.8e17 (contract constant)
     const OVER = 200_000_000_000_000_000n;             // 2e17: 2e16 above the cap
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, OVER);
     await mintAndApprove(token, tokenAddr, poolAddr, alice, 1_000_000);
-    await deposit(pool, poolAddr, alice, 100);         // sole depositor -> deterministic winner
+    await deposit(pool, poolAddr, alice, 100);         // sole depositor -> takes the grand tier
     const f = await enc(poolAddr, deployer, OVER);
     await pool.connect(deployer).fundPrize(f.handle, f.proof); // fund above the cap in one shot
     const depBal = await userU64(await token.confidentialBalanceOf(deployer.address), tokenAddr, deployer);
     expect(depBal).to.equal(OVER - MAX_PRIZE);         // only MAX_PRIZE actually left the funder; 2e16 refunded
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     const claimable = await userU64(await pool.claimableOf(0, alice.address), poolAddr, alice);
-    expect(claimable).to.equal(MAX_PRIZE);             // pot clamped to the cap, not absorbed beyond it
+    expect(claimable).to.equal(MAX_PRIZE / 2n);        // grand tier = 50% of the capped pot
   });
 
   it("no-loss: a saver can withdraw principal at any time", async function () {
@@ -227,32 +207,31 @@ describe("NdimbalPool", function () {
     expect(bal).to.equal(60n); // 100 deposited - 40 withdrawn
   });
 
-  it("lets the winner claim the prize without reverting", async function () {
+  it("lets the winners claim their prize without reverting", async function () {
     const { pool, alice, bob, carol } = await standard();
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     for (const who of [alice, bob, carol]) {
       await expect(pool.connect(who).claim(0)).to.not.be.reverted;
     }
   });
 
   // ------------------------------------------------- security / lifecycle
-  it("reverts draw() before the round is over", async function () {
+  it("reverts the draw before the round is over", async function () {
     const { pool } = await standard();
-    await expect(pool.draw()).to.be.revertedWith("round not over");
+    await expect(pool.drawTickets(8)).to.be.revertedWith("round not over");
   });
 
-  it("reverts a second draw() on the same round (no silent double draw)", async function () {
+  it("reverts a second draw on the same round (no silent double draw)", async function () {
     const { pool } = await standard();
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     // round has advanced + roundStart reset, so an immediate re-draw is rejected
-    await expect(pool.draw()).to.be.reverted;
+    await expect(pool.drawTickets(8)).to.be.revertedWith("round not over");
   });
 
   it("rejects deposits inside the anti-snipe lock window", async function () {
     const { pool, poolAddr, alice } = await standard();
-    // move to within LOCK seconds of the draw => deposits must be closed
     await ethers.provider.send("evm_increaseTime", [ROUND - 30]);
     await ethers.provider.send("evm_mine", []);
     expect(await pool.depositsOpen()).to.equal(false);
@@ -274,33 +253,30 @@ describe("NdimbalPool", function () {
   it("advances an empty round instead of reverting (leave() deadlock fix)", async function () {
     const { pool } = await deployPool(); // nobody deposited
     await advanceToDraw();
-    await expect(pool.draw()).to.not.be.reverted; // empty round must NOT revert...
-    expect(await pool.round()).to.equal(1n);       // ...it advances the clock instead
+    await expect(pool.drawTickets(8)).to.not.be.reverted; // empty round must NOT revert...
+    expect(await pool.round()).to.equal(1n);              // ...it advances the clock instead
     expect(await pool.drawn(0)).to.equal(true);
-    expect(await pool.depositsOpen()).to.equal(true); // and deposits reopen for the next round
+    expect(await pool.depositsOpen()).to.equal(true);     // and deposits reopen for the next round
   });
 
   it("recovers after every saver leaves (no permanent lock)", async function () {
-    // alice/bob/carol join then all leave -> pool empty. draw() must still advance the round so the
-    // pool isn't frozen forever, and a new saver can join and win the next round.
     const { pool, poolAddr, alice, bob, carol } = await standard();
     await pool.connect(alice).leave();
     await pool.connect(bob).leave();
     await pool.connect(carol).leave();
     expect(await pool.participantCount()).to.equal(0n);
     await advanceToDraw();
-    await pool.draw(); // empty round 0 advances
+    await runDraw(pool); // empty round 0 advances
     expect(await pool.round()).to.equal(1n);
-    // round 1: alice rejoins and wins the rolled-over prize
+    // round 1: alice rejoins and takes the grand tier of the rolled-over prize
     await deposit(pool, poolAddr, alice, 50);
     await advanceToDraw();
-    await pool.draw();
-    const won = await userBool(await pool.didWin(1, alice.address), poolAddr, alice);
-    expect(won).to.equal(true);
+    await runDraw(pool);
+    expect(await userBool(await pool.didWin(1, alice.address), poolAddr, alice)).to.equal(true);
   });
 
   // ----------------------------------------------------- functional edges
-  it("a single depositor always wins the round", async function () {
+  it("a single depositor always wins the grand tier", async function () {
     const [deployer, alice] = await ethers.getSigners();
     const { token, tokenAddr, pool, poolAddr } = await deployPool();
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
@@ -308,28 +284,24 @@ describe("NdimbalPool", function () {
     await deposit(pool, poolAddr, alice, 100);
     await fundPrize(pool, poolAddr, deployer, 1000);
     await advanceToDraw();
-    await pool.draw();
-    const won = await userBool(await pool.didWin(0, alice.address), poolAddr, alice);
-    expect(won).to.equal(true);
+    await runDraw(pool);
+    expect(await userBool(await pool.didWin(0, alice.address), poolAddr, alice)).to.equal(true);
+    const claimable = await userU64(await pool.claimableOf(0, alice.address), poolAddr, alice);
+    expect(claimable).to.equal(500n); // grand tier = 50% of 1000
   });
 
   it("a saver who withdraws everything before the draw cannot win", async function () {
     const { pool, poolAddr, alice, bob, carol } = await standard();
     await withdraw(pool, poolAddr, alice, 100); // alice exits fully (bob/carol remain)
     await advanceToDraw();
-    await pool.draw();
-    const aliceWon = await userBool(await pool.didWin(0, alice.address), poolAddr, alice);
-    expect(aliceWon).to.equal(false);
-    // exactly one winner still exists among the remaining savers
-    let winners = 0;
-    for (const who of [bob, carol]) {
-      if (await userBool(await pool.didWin(0, who.address), poolAddr, who)) winners++;
-    }
-    expect(winners).to.equal(1);
+    await runDraw(pool);
+    expect(await userBool(await pool.didWin(0, alice.address), poolAddr, alice)).to.equal(false);
+    // the two remaining positive savers take tiers 1 and 2; tier 3 is unfilled
+    expect(await countWinners(pool, poolAddr, 0, [bob, carol])).to.equal(2);
   });
 
   it("applies the private give-back split correctly on claim", async function () {
-    // sole depositor => deterministic winner, so we can assert exact token flows
+    // sole depositor => deterministic grand-tier winner (500), so we can assert exact token flows
     const [deployer, alice, bob] = await ethers.getSigners();
     const { token, tokenAddr, pool, poolAddr } = await deployPool(32, bob.address); // bob = immutable beneficiary
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
@@ -338,17 +310,17 @@ describe("NdimbalPool", function () {
     await setGiveBack(pool, poolAddr, alice, 30); // alice privately gives back 30%
     await fundPrize(pool, poolAddr, deployer, 1000);
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     await pool.connect(alice).claim(0);
 
-    // alice: 1_000_000 - 100 deposit + 700 kept prize = 1_000_600
+    // alice grand prize 500: gives back 30% (150), keeps 350 -> 1_000_000 - 100 + 350 = 1_000_250
     const aliceBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
-    expect(aliceBal).to.equal(1_000_600n);
+    expect(aliceBal).to.equal(1_000_250n);
 
-    // the 300 community share can only ever go to the IMMUTABLE beneficiary (bob) — permissionless, no admin
+    // the 150 community share can only ever go to the IMMUTABLE beneficiary (bob) — permissionless, no admin
     await pool.connect(alice).sweepCommunityFund();
     const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
-    expect(bobBal).to.equal(300n);
+    expect(bobBal).to.equal(150n);
   });
 
   it("keeps working across several consecutive rounds", async function () {
@@ -356,12 +328,8 @@ describe("NdimbalPool", function () {
     for (let r = 0; r < 3; r++) {
       if (r > 0) await fundPrize(pool, poolAddr, deployer, 1000); // round 0 already funded
       await advanceToDraw();
-      await pool.draw();
-      let winners = 0;
-      for (const who of [alice, bob, carol]) {
-        if (await userBool(await pool.didWin(r, who.address), poolAddr, who)) winners++;
-      }
-      expect(winners, `round ${r}`).to.equal(1);
+      await runDraw(pool);
+      expect(await countWinners(pool, poolAddr, r, [alice, bob, carol]), `round ${r}`).to.equal(3);
     }
   });
 
@@ -374,9 +342,8 @@ describe("NdimbalPool", function () {
   it("a third party cannot decrypt another saver's win flag", async function () {
     const { pool, poolAddr, alice, bob } = await standard();
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
     const aliceFlag = await pool.didWin(0, alice.address);
-    // bob is not FHE.allow'd on alice's flag => decryption must fail for him
     expect(await decryptFails(() => userBool(aliceFlag, poolAddr, bob))).to.equal(true);
   });
 
@@ -388,8 +355,7 @@ describe("NdimbalPool", function () {
 
   // ------------------------------------------ "Tanti caché" anonymous sponsorship
   it("privately routes part of a win to a member the winner chose in secret", async function () {
-    // alice (index 0) and bob (index 1) both join; bob then exits to 0 so alice wins deterministically,
-    // yet bob stays a participant and can be sponsored. alice secretly routes 40% of her net win to bob.
+    // alice is the sole positive-balance saver -> grand tier 500. She secretly routes 40% of her net to bob.
     const [deployer, alice, bob] = await ethers.getSigners();
     const { token, tokenAddr, pool, poolAddr } = await deployPool();
     await mintAndApprove(token, tokenAddr, poolAddr, deployer, 1_000_000);
@@ -406,32 +372,28 @@ describe("NdimbalPool", function () {
 
     await fundPrize(pool, poolAddr, deployer, 1000);
     await advanceToDraw();
-    await pool.draw();
+    await runDraw(pool);
+    await pool.connect(alice).claim(0); // grand tier 500, give-back 0, sponsors 40%
 
-    // alice wins (bob's ticket is 0). She keeps 60%, bob privately receives 40%.
-    await pool.connect(alice).claim(0);
-
-    // bob can read the amount routed to him, but never who sent it
+    // bob receives 40% of alice's net (500): 200
     const bobCredit = await userU64(await pool.sponsoredWonOf(bob.address), poolAddr, bob);
-    expect(bobCredit).to.equal(400n); // 1000 net (give-back 0) * 40%
+    expect(bobCredit).to.equal(200n);
 
-    // alice kept 600 (give-back 0, sponsored 40%): 1_000_000 - 100 deposit + 600 = 1_000_500
+    // alice keeps 60% of 500 (300): 1_000_000 - 100 deposit + 300 = 1_000_200
     const aliceBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
-    expect(aliceBal).to.equal(1_000_500n);
+    expect(aliceBal).to.equal(1_000_200n);
 
-    // bob withdraws his routed winnings: started 1_000_000 (deposited 50, withdrew 50) + 400 = 1_000_400
+    // bob withdraws routed winnings: 1_000_000 (deposited 50, withdrew 50) + 200 = 1_000_200
     await pool.connect(bob).claimSponsored();
     const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
-    expect(bobBal).to.equal(1_000_400n);
+    expect(bobBal).to.equal(1_000_200n);
   });
 
   it("a non-sponsored member receives nothing (no accidental routing)", async function () {
-    // carol is a participant but nobody sponsors her; her sponsored credit must stay 0
     const { pool, poolAddr, carol } = await standard();
     await advanceToDraw();
-    await pool.draw();
-    // claim by everyone (no sponsorship set anywhere)
-    for (const who of [carol]) await pool.connect(who).claim(0);
+    await runDraw(pool);
+    await pool.connect(carol).claim(0);
     const credit = await userU64(await pool.sponsoredWonOf(carol.address), poolAddr, carol);
     expect(credit).to.equal(0n);
   });
@@ -445,15 +407,15 @@ describe("NdimbalPool", function () {
     await setGiveBack(pool, poolAddr, alice, 30); // pledged 30% BEFORE the draw
     await fundPrize(pool, poolAddr, deployer, 1000);
     await advanceToDraw();
-    await pool.draw(); // snapshot captures 30%
+    await runDraw(pool); // snapshot captures 30%
     await setGiveBack(pool, poolAddr, alice, 0); // alice tries to renege after winning
     await pool.connect(alice).claim(0);
 
-    // the snapshot (30%) is applied, NOT the reneged 0% => alice keeps 700, community keeps 300
+    // the snapshot (30%) is applied to her grand prize (500): keeps 350, community keeps 150
     const aliceBal = await userU64(await token.confidentialBalanceOf(alice.address), tokenAddr, alice);
-    expect(aliceBal).to.equal(1_000_600n);
+    expect(aliceBal).to.equal(1_000_250n);
     await pool.connect(alice).sweepCommunityFund();
     const bobBal = await userU64(await token.confidentialBalanceOf(bob.address), tokenAddr, bob);
-    expect(bobBal).to.equal(300n);
+    expect(bobBal).to.equal(150n);
   });
 });

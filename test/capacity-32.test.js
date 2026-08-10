@@ -66,14 +66,11 @@ describe("NDIMBAL — capacity / gas sweep", function () {
       const B = 8; // batch size per transaction
       try {
         let total = 0n;
-        // ticketing batches (round 0): loop until drawPhase == 2
-        while ((await pool.drawPhase(0)) < 2n) {
-          const rc = await (await pool.drawTickets(B)).wait(); total += rc.gasUsed; txs++;
-        }
-        // winner batches: loop until drawPhase == 3
-        while ((await pool.drawPhase(0)) < 3n) {
-          const rc = await (await pool.drawWinners(B)).wait(); total += rc.gasUsed; txs++;
-        }
+        // 4-phase top-3 draw: tickets → 2nd max → 3rd max → winners
+        while ((await pool.drawPhase(0)) < 2n) { const rc = await (await pool.drawTickets(B)).wait(); total += rc.gasUsed; txs++; }
+        while ((await pool.drawPhase(0)) < 3n) { const rc = await (await pool.drawMax2(B)).wait(); total += rc.gasUsed; txs++; }
+        while ((await pool.drawPhase(0)) < 4n) { const rc = await (await pool.drawMax3(B)).wait(); total += rc.gasUsed; txs++; }
+        while ((await pool.drawPhase(0)) < 5n) { const rc = await (await pool.drawWinners(B)).wait(); total += rc.gasUsed; txs++; }
         drawGas = total; // sum across all batch txs (each tx has its OWN HCU budget)
         const rc3 = await (await pool.connect(savers[0]).claim(0)).wait();
         claimGas = rc3.gasUsed;
