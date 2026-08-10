@@ -70,8 +70,8 @@ opening seconds; land the second as the "this is a product, not a demo" beat.
 ## Links (video description)
 - Live dApp: https://ndimbal-rho.vercel.app
 - Repo: https://github.com/elhadjipapealaminesarr-creator/ndimbal
-- Verified contract (pool): https://sepolia.etherscan.io/address/0x98d67df5Bf5aD5c4D813d2892eB20613b322fed4
-- Confidential yield vault: https://sepolia.etherscan.io/address/0x6681DE864eF01c935A58E6c05208D050a27eC153
+- Verified contract (pool): https://sepolia.etherscan.io/address/0xD31Ff0080dcC6fabfBc496ec403A70c0BFd22A12
+- Confidential yield vault: https://sepolia.etherscan.io/address/0x4D22EC727D7Ab715531BBEfc55BFEA3BdAF250C7
 
 ---
 *El Hadji Pape Alamine Sarr — Dakar. NDIMBAL, part of the Kaddu family of confidential civic tools.*
