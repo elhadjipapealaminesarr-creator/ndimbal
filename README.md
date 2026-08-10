@@ -209,10 +209,15 @@ clear v1 rationale:
   phases** (`drawTickets → drawMax2 → drawMax3 → drawWinners`), each processing savers in **batches of 8**
   across separate transactions, so no single tx exceeds the total-HCU budget. Profiled directly on the fhEVM
   (see [`test/capacity-32.test.js`](./test/capacity-32.test.js)): the batched draw is safe from 3 to **32**
-  savers per round. The cap is an immutable constructor parameter. Going beyond 32 is a matter of more
+  savers per round — and the test now **asserts** the full 32-saver round completes every phase (it no longer
+  merely reports the largest working size, so a future regression that broke 32 would fail loudly). The cap is
+  an immutable constructor parameter. Going beyond 32 is a matter of more
   batches / a higher cap at deploy, or an off-chain-decryption argmax — on the roadmap. Savers can `leave()`
   to free a slot; a **stake-to-join** deterrent against dust slot-squatting is also on the roadmap. Note:
-  `leave()` reindexes `participants[]` (swap-pop). Because the draw
+  `leave()` reindexes `participants[]` (swap-pop). The draw iterates the **frozen snapshot** `_participantsAt[r]`
+  (never the live array), so a `leave()`/`withdraw()` *during* a multi-tx draw cannot desync it or brick a later
+  phase — the whole draw is resumable and self-consistent (regression-tested in
+  [`test/NdimbalAbandonedDraw.test.js`](./test/NdimbalAbandonedDraw.test.js)). Because the draw
   **freezes the participant list per round** (`_participantsAt[r]`), a `leave()` *after* a draw can no longer
   **redirect** a "Tanti caché" credit to whoever got swapped into that slot — `claim()` pays out against the
   frozen list. A `leave()` *before* the draw can still shift positions, so a sponsorship set by index may
@@ -232,13 +237,25 @@ clear v1 rationale:
   can never be used to divert funds. This removes the contract's only centralised trust point (the earlier
   single-admin, unconstrained-`to` sweep). Pointing the beneficiary at a Gnosis Safe or DAO at deploy time
   is a config choice, not a code change.
-- **The draw needs a trigger.** `draw()` is permissionless — anyone can call it once the round ends, so
-  the operator can't game it — but if nobody calls it, deposits stay locked. Production would add a
-  keeper (Chainlink Automation or similar); for the demo, evaluators trigger it themselves.
+- **The draw needs a trigger.** The batched draw (`drawTickets → drawMax2 → drawMax3 → drawWinners`) is
+  permissionless — anyone can push it forward once the round ends, so the operator can't game it — but if
+  nobody runs it, deposits stay locked until it completes. It is **resumable**: each phase continues from its
+  own on-chain cursor (`ticketDone`/`mask2Done`/`mask3Done`/`winDone`), so a draw abandoned or interrupted
+  mid-way is simply picked up by the next call — no state is lost and it can never deadlock. Production would
+  add a keeper (Chainlink Automation or similar); for the demo, evaluators trigger it themselves.
 - **The sponsorship index isn't validated.** A "Tanti caché" beneficiary index pointing at no real
   participant simply routes nothing (the amount returns to the winner via the encrypted maths).
   Validating it on-chain would require revealing the chosen index, which would defeat the sponsorship's
   privacy — so this trade-off is intentional.
+- **A `rand16 == 0` ticket collapses to its tiebreak (negligible, ~1/65536).** A ticket is
+  `min(balance, 2³⁹) × randEuint16`, then `<< 8 | (n − i)` so every ticket is unique (no two savers can
+  tie, which is what keeps the top-3 well-formed and no-loss intact). The one imperfection: if the protocol
+  random draws exactly `0` for a saver (probability 1/65536 per saver per round), their ticket collapses to
+  just the tiebreak `(n − i)`, so they almost certainly lose that round — a fairness penalty *beyond* the
+  intended weighting. It is left as-is on purpose: the probability is negligible and the obvious mitigation
+  (`rand + 1`, so the multiplier is never 0) adds an `FHE.add` per saver in the **tightest** phase
+  (`drawTickets`), eating into the batched draw's HCU headroom. Documented, measured (see the capacity
+  sweep), and deprioritised — not silently ignored.
 - **Give-back / sponsorship math is euint64 — and the prize is capped to keep it safe.** `c × pct / 100`
   stays in euint64 (like the ticket math; widening either to euint128 pushes the draw/`claim()` past the
   fhEVM HCU budget). To make that *enforced* rather than merely assumed, `fundPrize` **clamps the pot** with `FHE.min`

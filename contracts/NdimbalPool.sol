@@ -382,10 +382,9 @@ contract NdimbalPool is ZamaEthereumConfig {
     ///         `drawWinners`. The first call freezes the round; an empty pool finishes here.
     function drawTickets(uint256 batch) external {
         uint256 r = round;
-        uint256 n = participants.length;
         if (drawPhase[r] == 0) {
             require(block.timestamp >= roundStart + roundDuration, "round not over");
-            if (n == 0) { // empty round: finish immediately and advance the clock
+            if (participants.length == 0) { // empty round: finish immediately and advance the clock
                 drawPhase[r] = 5;
                 drawn[r] = true;
                 round = r + 1;
@@ -398,14 +397,25 @@ contract NdimbalPool is ZamaEthereumConfig {
         }
         require(drawPhase[r] == 1, "not in ticketing phase");
         require(batch > 0, "batch=0");
+        // Iterate the FROZEN snapshot, never the live participants[] — a leave()/withdraw mid-draw
+        // reindexes participants[] (swap-pop) and would otherwise desync ticket count vs. the snapshot,
+        // reverting the later phases. The snapshot keeps the whole multi-tx draw self-consistent.
+        address[] storage plist = _participantsAt[r];
+        uint256 n = plist.length;
         uint256 done = ticketDone[r];
         uint256 end = done + batch;
         if (end > n) end = n;
         euint64 balCap = FHE.asEuint64(uint64(1) << 39);
         euint64[] memory bt = new euint64[](end - done);
         for (uint256 i = done; i < end; i++) {
+            // ticket = min(balance, 2^39) * rand16, then << 8 | (n - i) as a unique tiebreak so no two
+            // savers can ever tie. Known negligible imperfection: if rand16 == 0 (probability 1/65536 per
+            // saver per round), the ticket collapses to just its tiebreak (n - i), so that saver almost
+            // certainly loses this round — a fairness penalty beyond the intended weighting. Left as-is on
+            // purpose: the probability is negligible and adding `rand+1` would cost extra HCU in the tightest
+            // phase (see the capacity sweep). Documented, not silently ignored.
             euint16 rnd = FHE.randEuint16();
-            euint64 t = FHE.mul(FHE.min(_bal(participants[i]), balCap), FHE.asEuint64(rnd));
+            euint64 t = FHE.mul(FHE.min(_bal(plist[i]), balCap), FHE.asEuint64(rnd));
             t = FHE.add(FHE.mul(t, FHE.asEuint64(256)), FHE.asEuint64(uint64(n - i)));
             FHE.allowThis(t); // persist ACL so later phases can compare it to the maxes
             _ticketsAt[r].push(t);

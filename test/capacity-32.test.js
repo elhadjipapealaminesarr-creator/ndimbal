@@ -89,9 +89,19 @@ describe("NDIMBAL — capacity / gas sweep", function () {
       safeCap = r.N;
       console.log(`  ${String(r.N).padStart(2)} | ${String(r.drawGas).padStart(14)} | ${String(r.claimGas).padStart(10)} | ${String(r.txs).padStart(3)} | ${verdict}`);
     }
-    console.log(`\n  → Largest size with draw() under ${SAFE_TARGET} gas: ${safeCap}`);
-    console.log("    Set MAX_PARTICIPANTS to this (or just below) and redeploy.\n");
+    console.log(`\n  → Largest size that completed the full batched draw: ${safeCap}`);
+    console.log("    MAX_PARTICIPANTS must be <= this. The shipped cap is 32.\n");
 
-    expect(safeCap, "at least a small pool must fit under the safe target").to.be.greaterThan(0);
+    // #18 — do NOT assume 32 still holds under the 4-phase flow: ASSERT it, don't just report.
+    // The deployed instance runs MAX_PARTICIPANTS = 32, so a full 32-saver round must complete
+    // every phase (tickets -> max2 -> max3 -> winners) and a claim, with no per-tx HCU revert.
+    const at32 = results.find((r) => r.N === 32);
+    expect(at32, "the sweep must actually reach N=32 (need >=33 funded signers — see hardhat.config accounts.count)").to.exist;
+    expect(
+      at32.drawGas != null,
+      `the FULL cap (32) must complete all 4 batched draw phases without revert — got: ${at32.note}`
+    ).to.equal(true);
+    expect(at32.claimGas != null, "claim() must also succeed at the full cap (32)").to.equal(true);
+    expect(safeCap, "at least a small pool must fit").to.be.greaterThan(0);
   });
 });
