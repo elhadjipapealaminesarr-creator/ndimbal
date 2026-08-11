@@ -12,6 +12,10 @@ module.exports = {
   solidity: {
     version: "0.8.27",
     settings: {
+      // Required: NdimbalPool's batched top-3 draw (drawWinners) has many locals and hits
+      // "stack too deep" without the IR pipeline. This also matches the settings the deployed
+      // + Etherscan-verified contract was compiled with (0.8.27 · viaIR · optimizer 800 · cancun).
+      viaIR: true,
       optimizer: { enabled: true, runs: 800 },
       evmVersion: "cancun",
     },
