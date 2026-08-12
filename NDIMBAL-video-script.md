@@ -12,7 +12,7 @@ opening seconds; land the second as the "this is a product, not a demo" beat.
 - **Do Mint + Allow pool once before recording** so the live part is fast.
 - **Demo solo (one wallet).** With a single depositor you *always* place in the top-3 — so your "I won" reveal is deterministic and clean, no retries on camera. (Proven capacity is **up to 32 savers/round** via the batched draw; solo is perfect for a tight demo.)
 - Second tab open on the **verified contract** on Etherscan. Activity-log popup ready. Record 1080p, cursor visible, zoom ~110%.
-- **Film scenes 3→6 in one continuous session** (no long pause). The demo pool uses **2-min rounds**, so by the time you've done the deposit + yield + solidarity, the round has usually ended and the draw is ready — everything fits in one real-time take.
+- **Film scenes 3→6 in one continuous session** (no long pause). The demo pool uses **5-min rounds** (deposits stay open ~4 min — well past the ~70s FHE encryption, so a deposit never reverts). Deposit early; do the yield + solidarity while the round runs; the draw is ready at the 5-min mark. Cut the waits in editing.
 
 ---
 
@@ -70,7 +70,7 @@ opening seconds; land the second as the "this is a product, not a demo" beat.
 ## Links (video description)
 - Live dApp: https://ndimbal-rho.vercel.app
 - Repo: https://github.com/elhadjipapealaminesarr-creator/ndimbal
-- Verified contract (pool): https://sepolia.etherscan.io/address/0x77bd980f13D475427d2538DB05eC195b2840849a
+- Verified contract (pool): https://sepolia.etherscan.io/address/0x0E53A8A9c149FCFe788776eDF328796285a994F2
 - Confidential yield vault: https://sepolia.etherscan.io/address/0x4D22EC727D7Ab715531BBEfc55BFEA3BdAF250C7
 
 ---

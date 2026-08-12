@@ -273,7 +273,7 @@ clear v1 rationale:
 
 | Contract | Address | Notes |
 |---|---|---|
-| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x77bd980f13D475427d2538DB05eC195b2840849a`](https://sepolia.etherscan.io/address/0x77bd980f13D475427d2538DB05eC195b2840849a#code) | Powers the hosted dApp · all audit fixes · **real-yield loop** (`fundVault`/`harvestYield`) · **batched draw — up to 32 savers/round** · **top-3 tiered prizes 50/30/20** (PoolTogether-style) · **`claimReinvest` (compound)** · immutable community beneficiary — no admin key |
+| **NdimbalPool** (live · audit-hardened · source-verified) | [`0x0E53A8A9c149FCFe788776eDF328796285a994F2`](https://sepolia.etherscan.io/address/0x0E53A8A9c149FCFe788776eDF328796285a994F2#code) | Powers the hosted dApp · all audit fixes · **real-yield loop** (`fundVault`/`harvestYield`) · **batched draw — up to 32 savers/round** · **top-3 tiered prizes 50/30/20** (PoolTogether-style) · **`claimReinvest` (compound)** · immutable community beneficiary — no admin key |
 | **MockConfidentialVault** (yield source) | [`0x4D22EC727D7Ab715531BBEfc55BFEA3BdAF250C7`](https://sepolia.etherscan.io/address/0x4D22EC727D7Ab715531BBEfc55BFEA3BdAF250C7) | Sepolia stand-in for the Steakhouse Confidential Prime USDC vault on Morpho; production points at the real mainnet vault via the same interface |
 | Confidential token (demo cUSDC) | [`0xe98b1DDd5F51342b3048a3A51A758996bCdCE976`](https://sepolia.etherscan.io/address/0xe98b1DDd5F51342b3048a3A51A758996bCdCE976) | ERC-7984 stand-in for the pool above |
 
