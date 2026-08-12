@@ -1,13 +1,13 @@
 # NDIMBAL — X thread (Zama Developer Program, Mainnet Season 4)
 
-Post as a THREAD (reply each tweet to the previous). Tag **@zama_fhe**. On X, every link counts as 23 chars, so each tweet below is within the 280-char limit.
+Post as a THREAD (reply each tweet to the previous). Tag **@zama** and use **#ZamaDeveloperProgram** (official requirement). On X, every link counts as 23 chars, so each tweet below is within the 280-char limit.
 
 ---
 
 **1/**
 Meet NDIMBAL 🌍 — a no-loss savings pool where you can win a prize every round and never lose your deposit… and it's all private.
 
-A confidential PoolTogether, built on @zama_fhe fhEVM.
+A confidential PoolTogether, built on @zama fhEVM.
 
 ▶️ Live on Sepolia: https://ndimbal-rho.vercel.app
 
@@ -64,10 +64,10 @@ Winners can even REINVEST to compound — still no loss.
 ---
 
 **8/**
-Built solo for the @zama_fhe Developer Program — Mainnet Season 4 🏆
+Built solo for the @zama Developer Program — Mainnet Season 4 🏆
 
 🔗 App: https://ndimbal-rho.vercel.app
 🔗 Code: https://github.com/elhadjipapealaminesarr-creator/ndimbal
 🔗 Contract: https://sepolia.etherscan.io/address/0x0E53A8A9c149FCFe788776eDF328796285a994F2
 
-#FHE #fhEVM #Zama
+#ZamaDeveloperProgram #FHE #fhEVM
