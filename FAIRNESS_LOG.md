@@ -178,3 +178,4 @@ top-3 **more often** — while no balance, pool total or ticket is ever revealed
 | 2026-10-22T03:13:09Z | 40 | success | PASS — exactly three winners (top-3) every round; bigger deposit lands in the top-3 more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/39714925309) |
 | 2026-10-22T16:33:10Z | 40 | success | PASS — exactly three winners (top-3) every round; bigger deposit lands in the top-3 more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/39814902225) |
 | 2026-10-23T03:10:59Z | 40 | success | PASS — exactly three winners (top-3) every round; bigger deposit lands in the top-3 more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/39893534672) |
+| 2026-10-23T16:23:06Z | 40 | success | PASS — exactly three winners (top-3) every round; bigger deposit lands in the top-3 more | [run](https://github.com/elhadjipapealaminesarr-creator/ndimbal/actions/runs/39986196868) |
